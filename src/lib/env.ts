@@ -21,7 +21,7 @@ export function getDeploymentIssues(): string[] {
   }
 
   if (process.env.NODE_ENV === "production" && !process.env.CRON_SECRET) {
-    issues.push("CRON_SECRET is not set (required for scheduled follow-up cron)");
+    issues.push("CRON_SECRET is not set (optional — only needed for follow-up email cron)");
   }
 
   return issues;
