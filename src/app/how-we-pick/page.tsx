@@ -11,6 +11,8 @@ export const metadata: Metadata = {
     "Learn how TOOLQZ reviews and selects life-hack tools — hands-on testing, honest pros and cons, and transparent affiliate disclosure.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function HowWePickPage() {
   const tools = await getPublishedTools();
 

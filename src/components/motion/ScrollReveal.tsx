@@ -20,6 +20,7 @@ export type ScrollRevealVariant =
 interface ScrollRevealProps {
   children: ReactNode;
   className?: string;
+  id?: string;
   variant?: ScrollRevealVariant;
   delay?: number;
   /** Play on mount — for above-the-fold hero content */
@@ -37,6 +38,7 @@ function isInViewport(el: HTMLElement) {
 export function ScrollReveal({
   children,
   className = "",
+  id,
   variant = "fade-up",
   delay = 0,
   eager = false,
@@ -85,7 +87,7 @@ export function ScrollReveal({
 
   if (disabled) {
     return (
-      <Component ref={ref} className={className}>
+      <Component ref={ref} id={id} className={className}>
         {children}
       </Component>
     );
@@ -94,6 +96,7 @@ export function ScrollReveal({
   return (
     <Component
       ref={ref}
+      id={id}
       className={`scroll-reveal scroll-reveal-${variant} ${visible ? "is-visible" : ""} ${className}`.trim()}
       style={style}
     >

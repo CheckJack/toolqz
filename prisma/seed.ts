@@ -172,6 +172,8 @@ async function main() {
       excerpt:
         "A behind-the-scenes look at how TOOLQZ evaluates websites and apps — from signup friction to pricing transparency.",
       coverImage: "/images/blog/how-we-test-digital-tools.png",
+      published: true,
+      publishedAt: new Date("2026-06-15"),
       content: `We don't list tools we haven't used. That sounds obvious, but most directories scrape marketing copy and call it a day. Here's what we actually do.
 
 ## Sign up like a real user

@@ -78,7 +78,7 @@ export function Header() {
                 key={link.href}
                 href={link.href}
                 onClick={(e) => {
-                  if (link.scrollHomeTop && pathname === "/") {
+                  if ("scrollHomeTop" in link && link.scrollHomeTop && pathname === "/") {
                     e.preventDefault();
                     window.scrollTo({ top: 0, behavior: "smooth" });
                   }
@@ -128,7 +128,7 @@ export function Header() {
                       <Link
                         href={link.href}
                         onClick={(e) => {
-                          if (link.scrollHomeTop && pathname === "/") {
+                          if ("scrollHomeTop" in link && link.scrollHomeTop && pathname === "/") {
                             e.preventDefault();
                             window.scrollTo({ top: 0, behavior: "smooth" });
                           }

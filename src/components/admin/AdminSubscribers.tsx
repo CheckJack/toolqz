@@ -3,14 +3,20 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { useToast } from "@/components/admin/Toast";
-import { csvRowsToObjects } from "@/lib/csv-parse";
+import { parseCsv } from "@/lib/csv-parse";
 import { parseSubscriberImportRow } from "@/lib/subscribers";
-import { NewsletterSubscriber } from "@/types/subscriber";
+import { NewsletterSubscriber, SubscriberImportRow } from "@/types/subscriber";
 
 const PAGE_SIZE = 25;
 
-function parseImportCsv(text: string) {
-  return csvRowsToObjects(text, parseSubscriberImportRow);
+function parseImportCsv(text: string): SubscriberImportRow[] {
+  const rows = parseCsv(text.trim());
+  if (rows.length < 2) return [];
+  const headers = rows[0].map((h) => h.trim().toLowerCase());
+  return rows
+    .slice(1)
+    .map((cols) => parseSubscriberImportRow(headers, cols))
+    .filter((row): row is SubscriberImportRow => row !== null);
 }
 
 export function AdminSubscribers() {

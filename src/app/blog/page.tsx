@@ -15,6 +15,8 @@ export const metadata: Metadata = {
     "News and analysis on websites, apps, and digital tools — reviews, comparisons, and tips from the TOOLQZ team.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function BlogPage() {
   const posts = await getPublishedBlogPosts();
   const [featured, ...rest] = posts;

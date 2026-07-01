@@ -2,16 +2,24 @@
   "name": "toolqz",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "prisma generate && next dev",
     "dev:clean": "rm -rf .next && prisma generate && next dev",
-    "build": "prisma generate && prisma db push && next build",
-    "start": "next start",
+    "prebuild": "node scripts/sync-prisma-provider.mjs",
+    "build": "prisma generate && next build",
+    "start": "node scripts/production-start.mjs",
+    "start:next": "next start -H 0.0.0.0 -p ${PORT:-3000}",
     "lint": "eslint",
+    "db:migrate": "prisma migrate deploy",
+    "db:migrate:dev": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
+    "db:setup": "prisma migrate deploy && tsx prisma/seed.ts",
     "db:studio": "prisma studio",
-    "postinstall": "prisma generate"
+    "postinstall": "node scripts/sync-prisma-provider.mjs && prisma generate"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -23,6 +31,7 @@
     "hls.js": "^1.6.16",
     "jose": "^6.2.3",
     "next": "^15.3.4",
+    "prisma": "^5.22.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "xlsx": "^0.18.5"
@@ -35,7 +44,6 @@
     "@types/react-dom": "^19.1.6",
     "eslint": "^9.29.0",
     "eslint-config-next": "^15.3.4",
-    "prisma": "^5.22.0",
     "tailwindcss": "^4.1.10",
     "tsx": "^4.22.4",
     "typescript": "^5.8.3"

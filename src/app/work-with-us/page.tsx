@@ -16,6 +16,8 @@ export const metadata: Metadata = {
     "Partner with TOOLQZ to promote your product or service. We review and list tools our audience trusts — get in touch about affiliate and partnership opportunities.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function WorkWithUsPage() {
   const tools = await getPublishedTools();
   const partners = getShowcasePartners(tools);

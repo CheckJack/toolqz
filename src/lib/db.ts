@@ -6,7 +6,7 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 // Bump when Prisma schema changes so dev hot-reload picks up a fresh client.
-const PRISMA_SCHEMA_VERSION = "2026-06-29-blog";
+const PRISMA_SCHEMA_VERSION = "2026-07-01-postgres";
 
 function createPrismaClient() {
   return new PrismaClient({

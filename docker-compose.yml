@@ -1,0 +1,24 @@
+# Local PostgreSQL for development and production-like testing.
+# Start: docker compose up -d
+# Then set DATABASE_URL in .env (see .env.example).
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: toolqz
+      POSTGRES_PASSWORD: toolqz
+      POSTGRES_DB: toolqz
+    volumes:
+      - toolqz_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U toolqz -d toolqz"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  toolqz_pg_data:

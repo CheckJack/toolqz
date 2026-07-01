@@ -4,7 +4,6 @@ import {
   parseToolFilters,
   toolOrderBy,
 } from "@/lib/tool-query";
-import { handleAuthError } from "@/lib/api-errors";
 import { logAudit } from "@/lib/audit-log";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
