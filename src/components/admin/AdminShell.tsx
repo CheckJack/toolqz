@@ -18,6 +18,7 @@ const navItems = [
   { href: "/admin/affiliates", label: "Affiliate CRM", badgeKey: "crm" as const, adminOnly: false },
   { href: "/admin/finances", label: "Finances", badgeKey: null as null, adminOnly: false },
   { href: "/admin/messages", label: "Messages", badgeKey: "messages" as const, adminOnly: false },
+  { href: "/admin/subscribers", label: "Mailing list", badgeKey: null as null, adminOnly: false },
   { href: "/admin/team", label: "Team", badgeKey: null as null, adminOnly: false },
   { href: "/admin/audit", label: "Audit log", badgeKey: null as null, adminOnly: true },
 ];

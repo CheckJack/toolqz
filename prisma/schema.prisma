@@ -237,6 +237,22 @@ model PartnerInquiry {
   @@index([email])
 }
 
+model NewsletterSubscriber {
+  id              String    @id @default(cuid())
+  email           String    @unique
+  name            String?
+  status          String    @default("ACTIVE")
+  source          String    @default("popup")
+  subscribedAt    DateTime  @default(now())
+  unsubscribedAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([subscribedAt])
+  @@index([email])
+}
+
 model BlogPost {
   id          String    @id @default(cuid())
   slug        String    @unique

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { CookieNotice } from "@/components/CookieNotice";
+import { NewsletterPopup } from "@/components/NewsletterPopup";
 import { SiteBackground } from "@/components/SiteBackground";
 import { PublicContent } from "@/components/PublicContent";
 import { THEME_STORAGE_KEY } from "@/lib/theme";
@@ -63,6 +64,7 @@ export default function RootLayout({
           <SiteBackground />
           <PublicContent>{children}</PublicContent>
           <CookieNotice />
+          <NewsletterPopup />
         </ThemeProvider>
       </body>
     </html>

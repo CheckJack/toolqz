@@ -45,6 +45,7 @@ const ENTITY_FILTERS = [
   { value: "affiliate", label: "Affiliates" },
   { value: "user", label: "Users" },
   { value: "finance", label: "Finances" },
+  { value: "subscriber", label: "Subscribers" },
 ] as const;
 
 const PAGE_SIZE = 50;
