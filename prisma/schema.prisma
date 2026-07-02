@@ -270,36 +270,3 @@ model BlogPost {
   @@index([published, publishedAt])
   @@index([createdAt])
 }
-
-model LinkPage {
-  id              String         @id @default("default")
-  title           String         @default("TOOLQZ")
-  bio             String         @default("")
-  avatarUrl       String?
-  backgroundType  String         @default("gradient")
-  backgroundColor String         @default("#272727")
-  gradientFrom    String         @default("#272727")
-  gradientTo      String         @default("#4b2559")
-  buttonColor     String         @default("#6db4e8")
-  buttonTextColor String         @default("#18181b")
-  buttonStyle     String         @default("rounded")
-  showBranding    Boolean        @default(true)
-  links           LinkPageItem[]
-  updatedAt       DateTime       @updatedAt
-}
-
-model LinkPageItem {
-  id         String   @id @default(cuid())
-  linkPageId String   @default("default")
-  linkPage   LinkPage @relation(fields: [linkPageId], references: [id], onDelete: Cascade)
-  title      String
-  url        String
-  icon       String?
-  sortOrder  Int      @default(0)
-  enabled    Boolean  @default(true)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-
-  @@index([linkPageId, sortOrder])
-  @@index([enabled])
-}

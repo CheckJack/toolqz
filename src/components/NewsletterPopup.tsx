@@ -145,7 +145,7 @@ export function NewsletterPopup() {
 
   return createPortal(
     <div
-      className="newsletter-modal-backdrop fixed inset-0 z-[200] flex items-end justify-center bg-black/45 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:items-center sm:p-6"
+      className="newsletter-modal-backdrop fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur-sm sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-labelledby="newsletter-title"
@@ -153,7 +153,7 @@ export function NewsletterPopup() {
     >
       <div
         ref={panelRef}
-        className="newsletter-modal-panel surface relative w-full max-w-lg overflow-hidden rounded-2xl shadow-[0_24px_80px_var(--shadow-surface)]"
+        className="newsletter-modal-panel surface relative max-h-[min(90dvh,calc(100dvh-env(safe-area-inset-top)-env(safe-area-inset-bottom)-2rem))] w-full max-w-lg overflow-y-auto overflow-x-hidden rounded-2xl shadow-[0_24px_80px_var(--shadow-surface)]"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="relative p-6 sm:p-8">

@@ -229,32 +229,6 @@ Every listing includes who it's for, pros, cons, and clear affiliate disclosure.
   }
 
   const blogCount = await prisma.blogPost.count();
-
-  await prisma.linkPage.upsert({
-    where: { id: "default" },
-    update: {},
-    create: {
-      id: "default",
-      title: "TOOLQZ",
-      bio: "Curated life-hack tools worth your time.",
-      backgroundType: "gradient",
-      backgroundColor: "#272727",
-      gradientFrom: "#272727",
-      gradientTo: "#4b2559",
-      buttonColor: "#6db4e8",
-      buttonTextColor: "#18181b",
-      buttonStyle: "rounded",
-      showBranding: true,
-      links: {
-        create: [
-          { title: "Browse tools", url: "/", icon: "🔗", sortOrder: 0, enabled: true },
-          { title: "Blog", url: "/blog", icon: "✍️", sortOrder: 1, enabled: true },
-          { title: "Partnerships", url: "/work-with-us", icon: "🤝", sortOrder: 2, enabled: true },
-        ],
-      },
-    },
-  });
-
   console.log("Database seeded successfully.");
   console.log(`Affiliate programs in CRM: ${count}`);
   console.log(`Blog posts: ${blogCount}`);
