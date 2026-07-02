@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { getPartnerMarkUrl } from "@/data/partners";
@@ -10,6 +10,9 @@ interface PartnerMarqueeProps {
   partners: Website[];
   className?: string;
 }
+
+/** Rough width per logo slot (icon/text + flex gap) for pre-layout estimate */
+const ESTIMATED_ITEM_PX = 112;
 
 function PartnerLogo({ partner }: { partner: Website }) {
   const markUrl = getPartnerMarkUrl(partner);
@@ -43,17 +46,75 @@ function PartnerLogo({ partner }: { partner: Website }) {
   );
 }
 
-export function PartnerMarquee({ partners, className = "" }: PartnerMarqueeProps) {
-  if (partners.length === 0) return null;
+function buildSegment(partners: Website[], repeats: number) {
+  return Array.from({ length: repeats }, () => partners).flat();
+}
 
-  const loop = [...partners, ...partners];
+export function PartnerMarquee({ partners, className = "" }: PartnerMarqueeProps) {
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLUListElement>(null);
+  const [segmentRepeats, setSegmentRepeats] = useState(3);
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    const measure = measureRef.current;
+    if (!viewport || !measure || partners.length === 0) return;
+
+    function syncRepeats() {
+      const viewportWidth = viewport!.clientWidth;
+      const measuredSegmentWidth = measure!.scrollWidth;
+
+      if (measuredSegmentWidth > 0) {
+        const repeats = Math.max(
+          2,
+          Math.ceil((viewportWidth * 1.15) / measuredSegmentWidth)
+        );
+        setSegmentRepeats((prev) => (prev === repeats ? prev : repeats));
+        return;
+      }
+
+      const estimatedSingleSet = partners.length * ESTIMATED_ITEM_PX;
+      const repeats = Math.max(
+        2,
+        Math.ceil((viewportWidth * 1.15) / estimatedSingleSet)
+      );
+      setSegmentRepeats((prev) => (prev === repeats ? prev : repeats));
+    }
+
+    syncRepeats();
+    const observer = new ResizeObserver(syncRepeats);
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [partners]);
+
+  const segment = useMemo(
+    () => buildSegment(partners, segmentRepeats),
+    [partners, segmentRepeats]
+  );
+
+  const loop = useMemo(() => [...segment, ...segment], [segment]);
+
+  if (partners.length === 0) return null;
 
   return (
     <div className={`partner-marquee relative w-full ${className}`}>
-      <div className="partner-marquee-viewport overflow-hidden">
+      {/* Hidden measure row — one segment worth of logos */}
+      <ul
+        ref={measureRef}
+        aria-hidden
+        className="pointer-events-none absolute flex w-max items-center gap-10 opacity-0 sm:gap-14 lg:gap-16"
+      >
+        {partners.map((partner) => (
+          <li key={`measure-${partner.slug}`}>
+            <PartnerLogo partner={partner} />
+          </li>
+        ))}
+      </ul>
+
+      <div ref={viewportRef} className="partner-marquee-viewport overflow-hidden">
         <ul className="partner-marquee-track flex w-max items-center gap-10 sm:gap-14 lg:gap-16">
           {loop.map((partner, index) => {
-            const isDuplicate = index >= partners.length;
+            const isDuplicate = index >= segment.length;
             return (
               <li
                 key={`${partner.slug}-${index}`}
