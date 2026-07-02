@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { queryDailyClicks } from "@/lib/analytics-queries";
+import { handleAuthError } from "@/lib/api-errors";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 
@@ -27,43 +29,6 @@ function getDailyClicksDays(range: string): number {
   if (range === "90d") return 90;
   if (range === "all") return 365;
   return 30;
-}
-
-async function getToolDailyClicks(toolId: string, range: string) {
-  if (range === "all") {
-    return prisma.$queryRaw<{ date: string; count: number }[]>`
-      SELECT date(clickedAt) as date, COUNT(*) as count
-      FROM Click
-      WHERE toolId = ${toolId}
-      GROUP BY date(clickedAt)
-      ORDER BY date ASC
-    `;
-  }
-  if (range === "7d") {
-    return prisma.$queryRaw<{ date: string; count: number }[]>`
-      SELECT date(clickedAt) as date, COUNT(*) as count
-      FROM Click
-      WHERE toolId = ${toolId} AND clickedAt >= datetime('now', '-7 days')
-      GROUP BY date(clickedAt)
-      ORDER BY date ASC
-    `;
-  }
-  if (range === "90d") {
-    return prisma.$queryRaw<{ date: string; count: number }[]>`
-      SELECT date(clickedAt) as date, COUNT(*) as count
-      FROM Click
-      WHERE toolId = ${toolId} AND clickedAt >= datetime('now', '-90 days')
-      GROUP BY date(clickedAt)
-      ORDER BY date ASC
-    `;
-  }
-  return prisma.$queryRaw<{ date: string; count: number }[]>`
-    SELECT date(clickedAt) as date, COUNT(*) as count
-    FROM Click
-    WHERE toolId = ${toolId} AND clickedAt >= datetime('now', '-30 days')
-    GROUP BY date(clickedAt)
-    ORDER BY date ASC
-  `;
 }
 
 export async function GET(request: NextRequest) {
@@ -114,36 +79,7 @@ export async function GET(request: NextRequest) {
       prisma.click.count({ where: { clickedAt: { gte: startOfWeek } } }),
       prisma.click.count({ where: { clickedAt: { gte: startOfMonth } } }),
       prisma.click.count({ where: rangeFilter }),
-      range === "all"
-        ? prisma.$queryRaw<{ date: string; count: number }[]>`
-            SELECT date(clickedAt) as date, COUNT(*) as count
-            FROM Click
-            GROUP BY date(clickedAt)
-            ORDER BY date ASC
-          `
-        : range === "7d"
-          ? prisma.$queryRaw<{ date: string; count: number }[]>`
-              SELECT date(clickedAt) as date, COUNT(*) as count
-              FROM Click
-              WHERE clickedAt >= datetime('now', '-7 days')
-              GROUP BY date(clickedAt)
-              ORDER BY date ASC
-            `
-          : range === "90d"
-            ? prisma.$queryRaw<{ date: string; count: number }[]>`
-                SELECT date(clickedAt) as date, COUNT(*) as count
-                FROM Click
-                WHERE clickedAt >= datetime('now', '-90 days')
-                GROUP BY date(clickedAt)
-                ORDER BY date ASC
-              `
-            : prisma.$queryRaw<{ date: string; count: number }[]>`
-                SELECT date(clickedAt) as date, COUNT(*) as count
-                FROM Click
-                WHERE clickedAt >= datetime('now', '-30 days')
-                GROUP BY date(clickedAt)
-                ORDER BY date ASC
-              `,
+      queryDailyClicks(range),
       prisma.tool.findMany({
         select: {
           id: true,
@@ -234,7 +170,7 @@ export async function GET(request: NextRequest) {
         select: { id: true },
       });
       if (tool) {
-        toolDailyClicks = await getToolDailyClicks(tool.id, range);
+        toolDailyClicks = await queryDailyClicks(range, tool.id);
       }
     }
 
@@ -263,7 +199,8 @@ export async function GET(request: NextRequest) {
       unassignedCount,
       followUpsDue,
     });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    console.error("[admin/analytics]", error);
+    return handleAuthError(error, "Failed to load analytics");
   }
 }
