@@ -1,6 +1,6 @@
 import Image from "next/image";
-import Link from "next/link";
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
+import { ToolDetailLink } from "@/components/ToolDetailLink";
 import { ToolLogo } from "@/components/tool-detail/ToolLogo";
 import { formatReviewed, getPricingHint } from "@/lib/homepage";
 import { getCategoryLabel, getDomain } from "@/lib/websites";
@@ -9,9 +9,10 @@ import { Website } from "@/types";
 interface WebsiteCardProps {
   website: Website;
   index?: number;
+  trackNewsletterIntent?: boolean;
 }
 
-export function WebsiteCard({ website, index = 0 }: WebsiteCardProps) {
+export function WebsiteCard({ website, index = 0, trackNewsletterIntent = false }: WebsiteCardProps) {
   const domain = getDomain(website.url);
   const pricingHint = getPricingHint(website);
   const reviewed = formatReviewed(website.lastReviewed);
@@ -26,7 +27,11 @@ export function WebsiteCard({ website, index = 0 }: WebsiteCardProps) {
       delay={isFirstScreen ? 360 + index * 70 : Math.min(Math.max(index - 6, 0), 8) * 60}
       className="surface-interactive group flex h-full flex-col overflow-hidden rounded-xl"
     >
-      <Link href={`/tools/${website.slug}`} className="relative block overflow-hidden">
+      <ToolDetailLink
+        slug={website.slug}
+        trackNewsletterIntent={trackNewsletterIntent}
+        className="relative block overflow-hidden"
+      >
         {screenshot ? (
           <div className="relative aspect-[16/10] w-full bg-dark-surface">
             <Image
@@ -41,18 +46,22 @@ export function WebsiteCard({ website, index = 0 }: WebsiteCardProps) {
         ) : (
           <div className="aspect-[16/10] w-full bg-dark-surface" />
         )}
-      </Link>
+      </ToolDetailLink>
 
       <div className="flex flex-1 flex-col p-5">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <ToolLogo name={website.name} logoUrl={website.logoUrl} size="sm" />
             <div className="min-w-0">
-              <Link href={`/tools/${website.slug}`} className="block truncate">
+              <ToolDetailLink
+                slug={website.slug}
+                trackNewsletterIntent={trackNewsletterIntent}
+                className="block truncate"
+              >
                 <h3 className="truncate text-[15px] font-medium tracking-[-0.02em] text-white transition-colors group-hover:text-neon">
                   {website.name}
                 </h3>
-              </Link>
+              </ToolDetailLink>
               <p className="truncate text-[12px] text-muted-dim">{domain}</p>
             </div>
           </div>

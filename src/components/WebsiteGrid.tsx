@@ -4,9 +4,14 @@ import { WebsiteCard } from "./WebsiteCard";
 interface WebsiteGridProps {
   websites: Website[];
   searchQuery: string;
+  trackNewsletterIntent?: boolean;
 }
 
-export function WebsiteGrid({ websites, searchQuery }: WebsiteGridProps) {
+export function WebsiteGrid({
+  websites,
+  searchQuery,
+  trackNewsletterIntent = false,
+}: WebsiteGridProps) {
   if (websites.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-dark-border px-6 py-20 text-center">
@@ -23,7 +28,12 @@ export function WebsiteGrid({ websites, searchQuery }: WebsiteGridProps) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {websites.map((website, index) => (
-        <WebsiteCard key={website.id} website={website} index={index} />
+        <WebsiteCard
+          key={website.id}
+          website={website}
+          index={index}
+          trackNewsletterIntent={trackNewsletterIntent}
+        />
       ))}
     </div>
   );

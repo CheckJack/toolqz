@@ -11,6 +11,7 @@ import { Header } from "@/components/Header";
 import { HeroSection } from "@/components/HeroSection";
 import { WebsiteGrid } from "@/components/WebsiteGrid";
 import { categories } from "@/data/websites";
+import { markHomepageVisited } from "@/lib/newsletter";
 import {
   getCategoryCounts,
   matchesSearch,
@@ -52,6 +53,10 @@ export function HomePage({ websites }: HomePageProps) {
     () => new Set(websites.map((w) => w.category)).size,
     [websites]
   );
+
+  useEffect(() => {
+    markHomepageVisited();
+  }, []);
 
   useEffect(() => {
     setSearchQuery(searchParams.get("q") ?? "");
@@ -138,7 +143,11 @@ export function HomePage({ websites }: HomePageProps) {
                     />
                   </ScrollReveal>
 
-                  <WebsiteGrid websites={filteredWebsites} searchQuery={searchQuery} />
+                  <WebsiteGrid
+                    websites={filteredWebsites}
+                    searchQuery={searchQuery}
+                    trackNewsletterIntent
+                  />
                 </div>
               </section>
             </div>

@@ -4,6 +4,12 @@ export function getDeploymentIssues(): string[] {
   if (!process.env.DATABASE_URL) {
     issues.push("DATABASE_URL is not set");
   } else if (
+    /xxxxx|\[YOUR|YOUR_PASSWORD|replace-me/i.test(process.env.DATABASE_URL)
+  ) {
+    issues.push(
+      "DATABASE_URL is still a placeholder — paste your real Supabase connection URI from supabase.com → Project → Connect"
+    );
+  } else if (
     process.env.NODE_ENV === "production" &&
     process.env.DATABASE_URL.startsWith("file:")
   ) {

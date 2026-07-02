@@ -14,8 +14,8 @@ export async function GET() {
     database = "ok";
   } catch (error) {
     database = "error";
-    databaseError =
-      error instanceof Error ? error.message.split("\n")[0] : "Connection failed";
+    const message = error instanceof Error ? error.message : "Connection failed";
+    databaseError = message.replace(/\s+/g, " ").trim().slice(0, 300);
   }
 
   const healthy = issues.length === 0 && database === "ok";
