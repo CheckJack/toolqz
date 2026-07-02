@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function AdminLoginForm() {
   const router = useRouter();
@@ -47,9 +46,6 @@ export function AdminLoginForm() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center bg-dark px-4">
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
-      </div>
       <div className="w-full max-w-md rounded-2xl border border-dark-border bg-dark-elevated p-8">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-bold">

@@ -7,7 +7,6 @@ import { SessionUser } from "@/lib/auth";
 import { ToastProvider, useToast } from "@/components/admin/Toast";
 import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
 import { AdminNotificationBell } from "@/components/admin/AdminNotificationBell";
-import { ThemeToggle } from "@/components/ThemeToggle";
 import { TeamChatWidget } from "@/components/admin/TeamChatWidget";
 
 const navItems = [
@@ -228,13 +227,11 @@ function AdminShellInner({
           </span>
           </div>
           <div className="flex items-center gap-2">
-            <ThemeToggle />
             <AdminNotificationBell />
           </div>
         </header>
 
         <header className={`${shellTopBarClass} hidden justify-end gap-2 bg-dark-elevated lg:flex`}>
-          <ThemeToggle />
           <AdminNotificationBell />
         </header>
 

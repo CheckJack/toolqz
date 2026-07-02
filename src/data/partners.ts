@@ -26,4 +26,9 @@ export const showcasePartners: ShowcasePartner[] = [
     name: "Hostinger",
     logoUrl: "/images/partners/hostinger.png",
   },
+  {
+    id: "elevenlabs",
+    name: "ElevenLabs",
+    logoUrl: "/images/partners/elevenlabs.png",
+  },
 ];

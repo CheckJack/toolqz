@@ -39,7 +39,7 @@ export function SearchBar({
     <div className="relative">
       <label
         htmlFor={id}
-        className={`group flex items-center gap-3 rounded-xl border border-white/12 bg-white/[0.07] px-4 backdrop-blur-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] transition-[border-color,box-shadow,background-color] focus-within:border-neon/35 focus-within:bg-white/[0.1] focus-within:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.14),0_0_0_3px_rgba(109,180,232,0.12)] [html[data-theme=light]_&]:border-black/10 [html[data-theme=light]_&]:bg-white/60 [html[data-theme=light]_&]:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9),0_1px_3px_rgba(0,0,0,0.06)] [html[data-theme=light]_&]:focus-within:border-neon/35 [html[data-theme=light]_&]:focus-within:bg-white/75 ${
+        className={`group flex items-center gap-3 rounded-xl border border-white/12 bg-white/[0.07] px-4 backdrop-blur-xl shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] transition-[border-color,box-shadow,background-color] focus-within:border-neon/35 focus-within:bg-white/[0.1] focus-within:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.14),0_0_0_3px_rgba(109,180,232,0.12)] ${
           isHero ? "py-1" : ""
         }`}
       >

@@ -38,7 +38,7 @@ export function CategoryFilter({
               className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12px] font-medium backdrop-blur-xl transition-[background-color,border-color,color,box-shadow] ${
                 isActive
                   ? "border-neon/40 bg-neon/18 text-neon shadow-[inset_0_1px_0_0_rgba(255,255,255,0.16),0_4px_16px_rgba(0,0,0,0.12)]"
-                  : "border-white/12 bg-white/[0.07] text-muted shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] hover:border-white/22 hover:bg-white/[0.12] hover:text-white [html[data-theme=light]_&]:border-black/10 [html[data-theme=light]_&]:bg-white/60 [html[data-theme=light]_&]:shadow-[inset_0_1px_0_0_rgba(255,255,255,0.9),0_1px_3px_rgba(0,0,0,0.06)] [html[data-theme=light]_&]:hover:border-black/15 [html[data-theme=light]_&]:hover:bg-white/75"
+                  : "border-white/12 bg-white/[0.07] text-muted shadow-[inset_0_1px_0_0_rgba(255,255,255,0.1)] hover:border-white/22 hover:bg-white/[0.12] hover:text-white"
               }`}
             >
               {category.label}
