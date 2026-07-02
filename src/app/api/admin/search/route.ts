@@ -11,6 +11,7 @@ const STATIC_PAGES = [
   { id: "page-finances", label: "Finances", href: "/admin/finances" },
   { id: "page-messages", label: "Messages", href: "/admin/messages" },
   { id: "page-subscribers", label: "Mailing list", href: "/admin/subscribers" },
+  { id: "page-links", label: "Link page", href: "/admin/links" },
   { id: "page-team", label: "Team", href: "/admin/team" },
   { id: "page-add-tool", label: "Add new tool", href: "/admin/tools/new" },
   { id: "page-add-program", label: "Add affiliate program", href: "/admin/affiliates?action=create" },

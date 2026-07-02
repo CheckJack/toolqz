@@ -156,15 +156,6 @@ export function NewsletterPopup() {
         className="newsletter-modal-panel surface relative w-full max-w-lg overflow-hidden rounded-2xl shadow-[0_24px_80px_var(--shadow-surface)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="pointer-events-none absolute inset-x-0 top-0 h-32 bg-[radial-gradient(ellipse_at_top,var(--hero-glow)_0%,transparent_72%)] opacity-80"
-          aria-hidden
-        />
-        <div
-          className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-neon/35 to-transparent"
-          aria-hidden
-        />
-
         <div className="relative p-6 sm:p-8">
           <div className="mb-6 flex items-start justify-between gap-4">
             <BrandLogo as="span" size="lg" />
