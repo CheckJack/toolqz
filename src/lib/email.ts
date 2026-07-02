@@ -1,5 +1,3 @@
-import nodemailer from "nodemailer";
-
 interface SendEmailInput {
   to: string;
   subject: string;
@@ -16,14 +14,10 @@ export function parseFromAddress(raw: string): { name: string; email: string } {
   return { name: "TOOLQZ", email: raw.trim() };
 }
 
-function usesSmtpRelay(apiKey: string) {
-  return apiKey.startsWith("xsmtpsib-");
-}
-
 export function isEmailConfigured(): boolean {
   const apiKey = process.env.BREVO_API_KEY?.trim();
   if (!apiKey) return false;
-  if (usesSmtpRelay(apiKey)) {
+  if (apiKey.startsWith("xsmtpsib-")) {
     return Boolean(
       process.env.BREVO_SMTP_USER?.trim() ||
         process.env.PARTNER_INQUIRY_EMAIL?.trim() ||
@@ -31,62 +25,6 @@ export function isEmailConfigured(): boolean {
     );
   }
   return true;
-}
-
-async function sendViaSmtp(
-  apiKey: string,
-  sender: { name: string; email: string },
-  input: SendEmailInput
-) {
-  const smtpUser =
-    process.env.BREVO_SMTP_USER?.trim() ||
-    process.env.PARTNER_INQUIRY_EMAIL?.trim() ||
-    sender.email;
-
-  const transport = nodemailer.createTransport({
-    host: "smtp-relay.brevo.com",
-    port: 587,
-    secure: false,
-    auth: {
-      user: smtpUser,
-      pass: apiKey,
-    },
-  });
-
-  await transport.sendMail({
-    from: `"${sender.name}" <${sender.email}>`,
-    to: input.toName ? `"${input.toName}" <${input.to}>` : input.to,
-    subject: input.subject,
-    text: input.text,
-    html: input.html ?? input.text.replace(/\n/g, "<br />"),
-  });
-}
-
-async function sendViaApi(
-  apiKey: string,
-  sender: { name: string; email: string },
-  input: SendEmailInput
-) {
-  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
-    method: "POST",
-    headers: {
-      "api-key": apiKey,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify({
-      sender,
-      to: [{ email: input.to, name: input.toName ?? input.to }],
-      subject: input.subject,
-      textContent: input.text,
-      htmlContent: input.html ?? input.text.replace(/\n/g, "<br />"),
-    }),
-  });
-
-  if (!res.ok) {
-    const detail = await res.text();
-    throw new Error(`Email failed: ${detail}`);
-  }
 }
 
 export async function sendEmail(input: SendEmailInput) {
@@ -108,10 +46,31 @@ export async function sendEmail(input: SendEmailInput) {
     return { ok: true, dev: true as const };
   }
 
-  if (usesSmtpRelay(apiKey)) {
-    await sendViaSmtp(apiKey, sender, input);
-  } else {
-    await sendViaApi(apiKey, sender, input);
+  if (apiKey.startsWith("xsmtpsib-")) {
+    throw new Error(
+      "Brevo SMTP keys (xsmtpsib-) are not supported in production. Use an xkeysib- API key from Brevo → SMTP & API → API keys."
+    );
+  }
+
+  const res = await fetch("https://api.brevo.com/v3/smtp/email", {
+    method: "POST",
+    headers: {
+      "api-key": apiKey,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      sender,
+      to: [{ email: input.to, name: input.toName ?? input.to }],
+      subject: input.subject,
+      textContent: input.text,
+      htmlContent: input.html ?? input.text.replace(/\n/g, "<br />"),
+    }),
+  });
+
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`Email failed: ${detail}`);
   }
 
   return { ok: true, dev: false as const };
