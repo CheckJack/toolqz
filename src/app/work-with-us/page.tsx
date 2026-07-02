@@ -7,8 +7,6 @@ import { PartnershipsHero } from "@/components/partnerships/PartnershipsHero";
 import { SectionHeader } from "@/components/SectionHeader";
 import { StaticPageShell } from "@/components/StaticPageShell";
 import { WorkWithUsForm } from "@/components/WorkWithUsForm";
-import { getShowcasePartners } from "@/data/partners";
-import { getPublishedTools } from "@/lib/tools";
 
 export const metadata: Metadata = {
   title: "Partnerships — TOOLQZ",
@@ -16,16 +14,11 @@ export const metadata: Metadata = {
     "Partner with TOOLQZ to promote your product or service. We review and list tools our audience trusts — get in touch about affiliate and partnership opportunities.",
 };
 
-export const dynamic = "force-dynamic";
-
-export default async function WorkWithUsPage() {
-  const tools = await getPublishedTools();
-  const partners = getShowcasePartners(tools);
-
+export default function WorkWithUsPage() {
   return (
     <>
       <Header />
-      <PartnershipsHero partners={partners} />
+      <PartnershipsHero />
       <StaticPageShell wide compactTop>
         <ScrollReveal as="section" id="get-in-touch" variant="scale-in" className="surface scroll-mt-header rounded-xl p-6 sm:p-8">
           <SectionHeader

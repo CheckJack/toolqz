@@ -2,51 +2,47 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
-import { getPartnerMarkUrl } from "@/data/partners";
-import type { Website } from "@/types";
+import type { ShowcasePartner } from "@/data/partners";
 
 interface PartnerMarqueeProps {
-  partners: Website[];
+  partners: ShowcasePartner[];
   className?: string;
 }
 
-/** Rough width per logo slot (icon/text + flex gap) for pre-layout estimate */
-const ESTIMATED_ITEM_PX = 112;
+/** Rough width per logo slot for pre-layout estimate */
+const ESTIMATED_ITEM_PX = 140;
 
-function PartnerLogo({ partner }: { partner: Website }) {
-  const markUrl = getPartnerMarkUrl(partner);
+function PartnerLogo({ partner }: { partner: ShowcasePartner }) {
   const [failed, setFailed] = useState(false);
-  const showMark = Boolean(markUrl) && !failed;
+
+  if (failed) {
+    return (
+      <span className="whitespace-nowrap text-[15px] font-semibold tracking-[-0.02em] text-white sm:text-[16px]">
+        {partner.name}
+      </span>
+    );
+  }
 
   return (
-    <Link
-      href={`/tools/${partner.slug}`}
-      title={`${partner.name} review`}
-      className="group flex h-8 shrink-0 items-center opacity-70 transition-opacity hover:opacity-100 sm:h-9"
+    <span
+      className="flex h-7 shrink-0 items-center opacity-70 sm:h-8"
+      title={partner.name}
+      aria-label={partner.name}
     >
-      {showMark ? (
-        <span className="relative block h-full w-8 sm:w-9">
-          <Image
-            src={markUrl!}
-            alt={partner.name}
-            fill
-            className="object-contain"
-            sizes="36px"
-            onError={() => setFailed(true)}
-            unoptimized
-          />
-        </span>
-      ) : (
-        <span className="whitespace-nowrap text-[15px] font-semibold tracking-[-0.02em] text-white sm:text-[16px]">
-          {partner.name}
-        </span>
-      )}
-    </Link>
+      <Image
+        src={partner.logoUrl}
+        alt={partner.name}
+        width={140}
+        height={40}
+        className="h-full w-auto max-h-7 max-w-[8.5rem] object-contain object-center sm:max-h-8 sm:max-w-[9.5rem]"
+        onError={() => setFailed(true)}
+        unoptimized
+      />
+    </span>
   );
 }
 
-function buildSegment(partners: Website[], repeats: number) {
+function buildSegment(partners: ShowcasePartner[], repeats: number) {
   return Array.from({ length: repeats }, () => partners).flat();
 }
 
@@ -105,7 +101,7 @@ export function PartnerMarquee({ partners, className = "" }: PartnerMarqueeProps
         className="pointer-events-none absolute flex w-max items-center gap-10 opacity-0 sm:gap-14 lg:gap-16"
       >
         {partners.map((partner) => (
-          <li key={`measure-${partner.slug}`}>
+          <li key={`measure-${partner.id}`}>
             <PartnerLogo partner={partner} />
           </li>
         ))}
@@ -117,7 +113,7 @@ export function PartnerMarquee({ partners, className = "" }: PartnerMarqueeProps
             const isDuplicate = index >= segment.length;
             return (
               <li
-                key={`${partner.slug}-${index}`}
+                key={`${partner.id}-${index}`}
                 aria-hidden={isDuplicate || undefined}
                 {...(isDuplicate ? { inert: true as const } : {})}
               >

@@ -1,13 +1,9 @@
 import Link from "next/link";
 import { PartnerMarquee } from "@/components/partnerships/PartnerMarquee";
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
-import type { Website } from "@/types";
+import { showcasePartners } from "@/data/partners";
 
-interface PartnershipsHeroProps {
-  partners: Website[];
-}
-
-export function PartnershipsHero({ partners }: PartnershipsHeroProps) {
+export function PartnershipsHero() {
   return (
     <section className="relative overflow-hidden pt-10 pb-12 sm:pt-14 sm:pb-16">
       <div
@@ -47,9 +43,9 @@ export function PartnershipsHero({ partners }: PartnershipsHeroProps) {
         </ScrollReveal>
       </div>
 
-      {partners.length > 0 && (
+      {showcasePartners.length > 0 && (
         <ScrollReveal delay={160} className="mt-12 sm:mt-14">
-          <PartnerMarquee partners={partners} />
+          <PartnerMarquee partners={showcasePartners} />
         </ScrollReveal>
       )}
     </section>
