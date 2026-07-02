@@ -440,3 +440,115 @@ body {
     transparent 100%
   );
 }
+
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bg-surface) 100%, transparent) 0%,
+    color-mix(in srgb, var(--text) 8%, var(--bg-surface)) 45%,
+    color-mix(in srgb, var(--bg-surface) 100%, transparent) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes homepage-loading-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.homepage-loading-enter {
+  animation: homepage-loading-enter 0.45s ease-out forwards;
+}
+
+@keyframes homepage-card-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.homepage-card-enter {
+  animation: homepage-card-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes homepage-brand-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    opacity: 1;
+    filter: drop-shadow(0 0 14px color-mix(in srgb, var(--color-neon) 35%, transparent));
+  }
+}
+
+.homepage-brand-pulse {
+  animation: homepage-brand-pulse 2s ease-in-out infinite;
+}
+
+.homepage-loading-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.homepage-loading-bar__track {
+  height: 100%;
+  width: 35%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--color-neon),
+    color-mix(in srgb, var(--color-neon) 60%, white)
+  );
+  box-shadow: 0 0 16px color-mix(in srgb, var(--color-neon) 55%, transparent);
+  animation: homepage-loading-bar-slide 1.15s ease-in-out infinite;
+}
+
+@keyframes homepage-loading-bar-slide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(380%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer,
+  .homepage-loading-enter,
+  .homepage-card-enter,
+  .homepage-brand-pulse,
+  .homepage-loading-bar__track {
+    animation: none;
+  }
+
+  .homepage-card-enter {
+    opacity: 1;
+    transform: none;
+  }
+}

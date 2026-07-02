@@ -6,15 +6,6 @@ import { showcasePartners } from "@/data/partners";
 export function PartnershipsHero() {
   return (
     <section className="relative overflow-hidden pt-10 pb-12 sm:pt-14 sm:pb-16">
-      <div
-        className="pointer-events-none absolute -top-24 left-1/2 h-[380px] w-[min(100%,720px)] -translate-x-1/2 opacity-40"
-        style={{
-          background:
-            "radial-gradient(ellipse at center, var(--hero-glow) 0%, transparent 70%)",
-        }}
-        aria-hidden
-      />
-
       <div className="relative mx-auto max-w-4xl px-5 sm:px-8">
         <ScrollReveal eager className="text-center">
           <p className="text-[11px] font-medium uppercase tracking-[0.2em] text-muted">

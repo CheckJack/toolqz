@@ -1,8 +1,9 @@
 "use client";
 
 import { createContext, useCallback, useContext, useState } from "react";
+import { ToastAlert3, type ToastAlertVariant } from "@/components/ui/alert-3";
 
-type ToastType = "success" | "error";
+type ToastType = ToastAlertVariant;
 
 interface ToastAction {
   label: string;
@@ -11,12 +12,14 @@ interface ToastAction {
 
 interface ToastItem {
   id: number;
-  message: string;
+  title: string;
+  description?: string;
   type: ToastType;
   action?: ToastAction;
 }
 
 interface ToastOptions {
+  description?: string;
   action?: ToastAction;
   duration?: number;
 }
@@ -36,7 +39,16 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     (message: string, type: ToastType = "success", options?: ToastOptions) => {
       const id = Date.now() + Math.random();
       const duration = options?.duration ?? (options?.action ? 5000 : 4000);
-      setToasts((prev) => [...prev, { id, message, type, action: options?.action }]);
+      setToasts((prev) => [
+        ...prev,
+        {
+          id,
+          title: message,
+          description: options?.description,
+          type,
+          action: options?.action,
+        },
+      ]);
       setTimeout(() => {
         dismiss(id);
       }, duration);
@@ -47,30 +59,26 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex flex-col gap-2">
+      <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-[min(100vw-2rem,22rem)] flex-col gap-2 sm:bottom-6 sm:right-6">
         {toasts.map((t) => (
-          <div
+          <ToastAlert3
             key={t.id}
-            className={`pointer-events-auto flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium shadow-lg ${
-              t.type === "error"
-                ? "border border-red-500/30 bg-red-500/90 text-white"
-                : "bg-neon text-ink"
-            }`}
-          >
-            <span>{t.message}</span>
-            {t.action && (
-              <button
-                type="button"
-                onClick={() => {
-                  t.action?.onClick();
-                  dismiss(t.id);
-                }}
-                className="shrink-0 font-semibold underline underline-offset-2"
-              >
-                {t.action.label}
-              </button>
-            )}
-          </div>
+            title={t.title}
+            description={t.description}
+            variant={t.type}
+            onDismiss={() => dismiss(t.id)}
+            action={
+              t.action
+                ? {
+                    label: t.action.label,
+                    onClick: () => {
+                      t.action?.onClick();
+                      dismiss(t.id);
+                    },
+                  }
+                : undefined
+            }
+          />
         ))}
       </div>
     </ToastContext.Provider>

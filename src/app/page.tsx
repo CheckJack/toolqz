@@ -1,21 +1,13 @@
 import { Suspense } from "react";
-import { HomePage } from "@/components/HomePage";
-import { getPublishedTools } from "@/lib/tools";
+import { HomePageLoading } from "@/components/HomePageLoading";
+import { HomePageLoader } from "@/components/HomePageLoader";
 
 export const dynamic = "force-dynamic";
 
-export default async function Page() {
-  let websites: Awaited<ReturnType<typeof getPublishedTools>> = [];
-
-  try {
-    websites = await getPublishedTools();
-  } catch (error) {
-    console.error("[homepage] Failed to load tools:", error);
-  }
-
+export default function Page() {
   return (
-    <Suspense fallback={<div className="p-8 text-muted">Loading tools...</div>}>
-      <HomePage websites={websites} />
+    <Suspense fallback={<HomePageLoading />}>
+      <HomePageLoader />
     </Suspense>
   );
 }
