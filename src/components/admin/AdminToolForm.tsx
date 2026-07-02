@@ -556,7 +556,7 @@ export function AdminToolForm({ form, onChange, isNew, isAdmin = true, originalS
             </div>
           )}
         </div>
-        <StringList label="Screenshot URLs" items={form.screenshots.length ? form.screenshots : [""]} onChange={(v) => set("screenshots", v.filter(Boolean))} placeholder="https://..." />
+        <StringList label="Screenshot URLs" items={form.screenshots.length ? form.screenshots : [""]} onChange={(v) => set("screenshots", v)} placeholder="https://..." />
         {form.screenshots.filter(Boolean).length > 0 && (
           <div className="flex flex-wrap gap-2">
             {form.screenshots.filter(Boolean).map((url, i) => (
