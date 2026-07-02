@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { welcomeNewsletterEmail } from "@/lib/email-templates";
+import { sendEmail } from "@/lib/email";
 import { isValidEmail, normalizeEmail } from "@/lib/subscribers";
+
+async function sendWelcomeEmail(email: string, name: string | null) {
+  const { subject, text, html } = welcomeNewsletterEmail(name);
+  await sendEmail({ to: email, toName: name ?? undefined, subject, text, html });
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -46,6 +53,12 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      try {
+        await sendWelcomeEmail(email, name ?? existing.name);
+      } catch (error) {
+        console.error("Newsletter welcome email failed:", error);
+      }
+
       return NextResponse.json({ ok: true }, { status: 200 });
     }
 
@@ -57,6 +70,12 @@ export async function POST(request: NextRequest) {
         status: "ACTIVE",
       },
     });
+
+    try {
+      await sendWelcomeEmail(email, name);
+    } catch (error) {
+      console.error("Newsletter welcome email failed:", error);
+    }
 
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {

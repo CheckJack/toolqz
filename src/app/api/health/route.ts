@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getDeploymentIssues } from "@/lib/env";
+import { isEmailConfigured } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,7 @@ export async function GET() {
       database,
       databaseError,
       hasDatabaseUrl: Boolean(process.env.DATABASE_URL),
+      emailConfigured: isEmailConfigured(),
       issues,
       timestamp: new Date().toISOString(),
     },

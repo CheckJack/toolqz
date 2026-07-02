@@ -27,7 +27,15 @@ export function getDeploymentIssues(): string[] {
   }
 
   if (process.env.NODE_ENV === "production" && !process.env.CRON_SECRET) {
-    issues.push("CRON_SECRET is not set (optional — only needed for follow-up email cron)");
+    issues.push("CRON_SECRET is not set (required for follow-up email cron)");
+  }
+
+  if (process.env.NODE_ENV === "production" && !process.env.BREVO_API_KEY?.trim()) {
+    issues.push("BREVO_API_KEY is not set — outbound email is disabled");
+  }
+
+  if (process.env.NODE_ENV === "production" && !process.env.NOTIFY_FROM_EMAIL?.trim()) {
+    issues.push("NOTIFY_FROM_EMAIL is not set — required for Brevo sender");
   }
 
   return issues;

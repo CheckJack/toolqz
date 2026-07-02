@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { partnerInquiryEmail } from "@/lib/email-templates";
 import { sendEmail } from "@/lib/email";
 
 const PRODUCT_TYPES = new Set(["saas", "digital", "service", "app", "other"]);
@@ -58,9 +59,9 @@ export async function POST(request: NextRequest) {
     });
 
     const notifyTo =
-      process.env.PARTNER_INQUIRY_EMAIL ??
-      process.env.ADMIN_EMAIL ??
-      "admin@toolqz.com";
+      process.env.PARTNER_INQUIRY_EMAIL?.trim() ||
+      process.env.ADMIN_EMAIL?.trim() ||
+      "tc@toolqz.com";
 
     const productLabel =
       productType === "saas"
@@ -73,21 +74,26 @@ export async function POST(request: NextRequest) {
               ? "Mobile or web app"
               : "Other";
 
-    await sendEmail({
-      to: notifyTo,
-      subject: `Partner inquiry: ${companyName}`,
-      text: [
-        `New work-with-us inquiry (${inquiry.id})`,
-        "",
-        `Company: ${companyName}`,
-        `Contact: ${contactName}`,
-        `Email: ${email}`,
-        `Website: ${website ?? "—"}`,
-        `Type: ${productLabel}`,
-        "",
-        message,
-      ].join("\n"),
+    const mail = partnerInquiryEmail({
+      id: inquiry.id,
+      companyName,
+      contactName,
+      email,
+      website,
+      productLabel,
+      message,
     });
+
+    try {
+      await sendEmail({
+        to: notifyTo,
+        subject: mail.subject,
+        text: mail.text,
+        html: mail.html,
+      });
+    } catch (error) {
+      console.error("Partner inquiry email failed:", error);
+    }
 
     return NextResponse.json({ ok: true }, { status: 201 });
   } catch (error) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { followUpDigestEmail, type FollowUpDigestItem } from "@/lib/email-templates";
 import { sendEmail } from "@/lib/email";
 import { createNotification, processDueFollowUpNotifications } from "@/lib/notifications";
 
@@ -18,9 +19,9 @@ export async function GET(request: NextRequest) {
   const now = new Date();
   const programs = await processDueFollowUpNotifications();
 
-  let emailsSent = 0;
   let inAppCreated = 0;
   let skipped = 0;
+  const digestItems: FollowUpDigestItem[] = [];
 
   for (const program of programs) {
     if (
@@ -42,7 +43,6 @@ export async function GET(request: NextRequest) {
       ? program.nextFollowUpAt.toLocaleDateString()
       : "soon";
     const href = `/admin/affiliates/${program.id}`;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
     const existingNotification = await prisma.adminNotification.findFirst({
       where: {
@@ -67,18 +67,12 @@ export async function GET(request: NextRequest) {
       inAppCreated++;
     }
 
-    if (assignee.email && assignee.emailFollowUpReminders) {
-      try {
-        await sendEmail({
-          to: assignee.email,
-          subject: `Follow-up due: ${program.companyName}`,
-          text: `Hi ${assignee.name},\n\nFollow-up for ${program.companyName} is due (${dueDate}).\n\nOpen CRM: ${appUrl}${href}`,
-        });
-        emailsSent++;
-      } catch {
-        // In-app notification still created
-      }
-    }
+    digestItems.push({
+      companyName: program.companyName,
+      dueDate,
+      assigneeName: assignee.name,
+      href,
+    });
 
     await prisma.affiliateProgram.update({
       where: { id: program.id },
@@ -86,10 +80,36 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  let emailsSent = 0;
+  if (digestItems.length > 0) {
+    const members = await prisma.user.findMany({
+      where: { emailFollowUpReminders: true },
+      select: { email: true, name: true },
+    });
+
+    for (const member of members) {
+      const mail = followUpDigestEmail(member.name, digestItems);
+      try {
+        await sendEmail({
+          to: member.email,
+          toName: member.name,
+          subject: mail.subject,
+          text: mail.text,
+          html: mail.html,
+        });
+        emailsSent++;
+      } catch (error) {
+        console.error(`Follow-up digest email failed for ${member.email}:`, error);
+      }
+    }
+  }
+
   return NextResponse.json({
     emailsSent,
     inAppCreated,
     skipped,
+    digestItems: digestItems.length,
+    membersNotified: digestItems.length > 0 ? emailsSent : 0,
     checked: programs.length,
   });
 }
