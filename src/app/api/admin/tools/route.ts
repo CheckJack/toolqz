@@ -4,7 +4,8 @@ import {
   parseToolFilters,
   toolOrderBy,
 } from "@/lib/tool-query";
-import { assertToolCategoryExists } from "@/lib/categories";
+import { assertToolCategoryExists, listToolCategoryFilters } from "@/lib/categories";
+import { handleAuthError } from "@/lib/api-errors";
 import { logAudit } from "@/lib/audit-log";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
     );
     const orderBy = toolOrderBy(sort);
 
-    const [items, total, dbCategories] = await Promise.all([
+    const [items, total, categoryFilters] = await Promise.all([
       prisma.tool.findMany({
         where,
         include: toolInclude,
@@ -48,24 +49,19 @@ export async function GET(request: NextRequest) {
         take: pageSize,
       }),
       prisma.tool.count({ where }),
-      prisma.toolCategory.findMany({
-        orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-        select: { slug: true, label: true },
-      }),
+      listToolCategoryFilters(),
     ]);
-
-    const categories = dbCategories.map((row) => row.slug);
 
     return NextResponse.json({
       items: items.map(serializeTool),
       total,
       page,
       pageSize,
-      categories,
-      categoryLabels: Object.fromEntries(dbCategories.map((row) => [row.slug, row.label])),
+      categories: categoryFilters.slugs,
+      categoryLabels: categoryFilters.labels,
     });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    return handleAuthError(error, "Failed to load tools");
   }
 }
 

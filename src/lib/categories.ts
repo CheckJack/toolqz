@@ -15,13 +15,52 @@ export function getCategoryLabel(category: string, labels?: Record<string, strin
 }
 
 export async function getPublishedCategories(): Promise<CategoryInfo[]> {
-  const rows = await prisma.toolCategory.findMany({
-    where: { published: true },
-    orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-    select: { slug: true, label: true },
-  });
+  try {
+    const rows = await prisma.toolCategory.findMany({
+      where: { published: true },
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+      select: { slug: true, label: true },
+    });
+    if (rows.length > 0) {
+      return [{ id: "all", label: "All" }, ...rows.map((row) => ({ id: row.slug, label: row.label }))];
+    }
+  } catch {
+    // ToolCategory table may not exist until migrations run
+  }
 
-  return [{ id: "all", label: "All" }, ...rows.map((row) => ({ id: row.slug, label: row.label }))];
+  const groups = await prisma.tool.groupBy({ by: ["category"] });
+  const slugs = [...new Set(groups.map((g) => g.category))].sort();
+  return [
+    { id: "all", label: "All" },
+    ...slugs.map((slug) => ({ id: slug, label: getCategoryLabel(slug) })),
+  ];
+}
+
+export async function listToolCategoryFilters(): Promise<{
+  slugs: string[];
+  labels: Record<string, string>;
+}> {
+  try {
+    const rows = await prisma.toolCategory.findMany({
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+      select: { slug: true, label: true },
+    });
+    if (rows.length > 0) {
+      return {
+        slugs: rows.map((row) => row.slug),
+        labels: Object.fromEntries(rows.map((row) => [row.slug, row.label])),
+      };
+    }
+  } catch {
+    // ToolCategory table may not exist until migrations run
+  }
+
+  const groups = await prisma.tool.groupBy({ by: ["category"] });
+  const slugs = groups.map((g) => g.category).sort();
+  return {
+    slugs,
+    labels: Object.fromEntries(slugs.map((slug) => [slug, getCategoryLabel(slug)])),
+  };
 }
 
 export async function getCategoryLabelMap(): Promise<Record<string, string>> {
@@ -32,26 +71,54 @@ export async function getCategoryLabelMap(): Promise<Record<string, string>> {
 }
 
 export async function assertToolCategoryExists(slug: string): Promise<void> {
-  const category = await prisma.toolCategory.findUnique({ where: { slug } });
-  if (!category) {
-    throw new Error(`Unknown category "${slug}". Create it under Admin → Categories first.`);
+  try {
+    const category = await prisma.toolCategory.findUnique({ where: { slug } });
+    if (!category) {
+      throw new Error(`Unknown category "${slug}". Create it under Admin → Categories first.`);
+    }
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("Unknown category")) {
+      throw error;
+    }
+    // Table missing or DB error — allow legacy slug values until migrations complete
   }
 }
 
 export async function listAdminCategories() {
-  const categories = await prisma.toolCategory.findMany({
-    orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-  });
+  try {
+    const categories = await prisma.toolCategory.findMany({
+      orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+    });
 
-  const toolCounts = await prisma.tool.groupBy({
-    by: ["category"],
-    _count: true,
-  });
+    const toolCounts = await prisma.tool.groupBy({
+      by: ["category"],
+      _count: true,
+    });
 
-  const countBySlug = Object.fromEntries(toolCounts.map((row) => [row.category, row._count]));
+    const countBySlug = Object.fromEntries(toolCounts.map((row) => [row.category, row._count]));
 
-  return categories.map((category) => ({
-    ...category,
-    toolCount: countBySlug[category.slug] ?? 0,
-  }));
+    return categories.map((category) => ({
+      ...category,
+      toolCount: countBySlug[category.slug] ?? 0,
+    }));
+  } catch {
+    const toolCounts = await prisma.tool.groupBy({
+      by: ["category"],
+      _count: true,
+    });
+
+    return toolCounts
+      .map((row) => ({
+        id: row.category,
+        slug: row.category,
+        label: getCategoryLabel(row.category),
+        description: null,
+        sortOrder: 0,
+        published: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        toolCount: row._count,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
 }
