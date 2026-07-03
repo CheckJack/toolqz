@@ -11,7 +11,7 @@ import { TeamChatWidget } from "@/components/admin/TeamChatWidget";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", badgeKey: null as null, adminOnly: false },
-  { href: "/admin/analytics", label: "Click Analytics", badgeKey: null as null, adminOnly: false },
+  { href: "/admin/analytics", label: "Analytics", badgeKey: null as null, adminOnly: false },
   { href: "/admin/tools", label: "Tools", badgeKey: null as null, adminOnly: false },
   { href: "/admin/blog", label: "Blog", badgeKey: null as null, adminOnly: false },
   { href: "/admin/affiliates", label: "Affiliate CRM", badgeKey: "crm" as const, adminOnly: false },

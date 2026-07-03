@@ -164,6 +164,7 @@ export function AdminAnalytics() {
               const v = e.target.value;
               setRange(v);
               const params = new URLSearchParams(searchParams.toString());
+              params.set("tab", "clicks");
               if (v === "30d") params.delete("range");
               else params.set("range", v);
               router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
@@ -207,6 +208,7 @@ export function AdminAnalytics() {
               type="button"
               onClick={() => {
                 const params = new URLSearchParams(searchParams.toString());
+                params.set("tab", "clicks");
                 params.delete("tool");
                 router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
               }}

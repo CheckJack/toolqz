@@ -26,6 +26,7 @@
   },
   "dependencies": {
     "@eslint/eslintrc": "^3.3.5",
+    "@google-analytics/data": "^6.1.0",
     "@prisma/client": "^5.22.0",
     "@tailwindcss/postcss": "^4.1.10",
     "@types/bcryptjs": "^2.4.6",

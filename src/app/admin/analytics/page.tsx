@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { AdminShell } from "@/components/admin/AdminShell";
-import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
+import { AdminAnalyticsHub } from "@/components/admin/AdminAnalyticsHub";
 import { getSession } from "@/lib/auth";
 
 export default async function AdminAnalyticsPage() {
@@ -11,7 +11,7 @@ export default async function AdminAnalyticsPage() {
   return (
     <AdminShell user={session}>
       <Suspense fallback={<p className="text-muted">Loading analytics...</p>}>
-        <AdminAnalytics />
+        <AdminAnalyticsHub />
       </Suspense>
     </AdminShell>
   );
