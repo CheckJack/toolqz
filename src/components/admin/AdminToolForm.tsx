@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import type { FaqItem, HowItWorksStep, PricingTier } from "@/types";
 import type { AdminTool } from "@/lib/tool-payload";
 import { DateInput } from "@/components/admin/DateInput";
@@ -399,6 +400,21 @@ interface Props {
 }
 
 export function AdminToolForm({ form, onChange, isNew, isAdmin = true, originalSlug, linkedAffiliate }: Props) {
+  const [categoryOptions, setCategoryOptions] = useState<{ slug: string; label: string }[]>([]);
+
+  useEffect(() => {
+    fetch("/api/admin/categories")
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((data) => {
+        setCategoryOptions(
+          (data.items ?? []).map((item: { slug: string; label: string }) => ({
+            slug: item.slug,
+            label: item.label,
+          }))
+        );
+      })
+      .catch(() => {});
+  }, []);
   const set = <K extends keyof ToolFormData>(key: K, value: ToolFormData[K]) =>
     onChange({ ...form, [key]: value });
 
@@ -445,10 +461,26 @@ export function AdminToolForm({ form, onChange, isNew, isAdmin = true, originalS
           <div>
             <label className="mb-1 block text-sm text-muted">Category</label>
             <select className={inputClass} value={form.category} onChange={(e) => set("category", e.target.value)}>
-              {SITE_CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
+              {categoryOptions.length === 0 ? (
+                SITE_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))
+              ) : (
+                categoryOptions.map((c) => (
+                  <option key={c.slug} value={c.slug}>
+                    {c.label}
+                  </option>
+                ))
+              )}
             </select>
+            <p className="mt-1 text-xs text-muted">
+              Manage categories in{" "}
+              <a href="/admin/categories" className="text-neon hover:underline">
+                Admin → Categories
+              </a>
+            </p>
           </div>
           <div>
             <label className="mb-1 block text-sm text-muted">Website URL *</label>

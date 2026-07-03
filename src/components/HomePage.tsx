@@ -10,7 +10,6 @@ import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { HeroSection } from "@/components/HeroSection";
 import { WebsiteGrid } from "@/components/WebsiteGrid";
-import { categories } from "@/data/websites";
 import { markHomepageVisited } from "@/lib/newsletter";
 import {
   getCategoryCounts,
@@ -18,16 +17,17 @@ import {
   SortOption,
   sortWebsites,
 } from "@/lib/homepage";
-import { Category, Website } from "@/types";
+import { Category, CategoryInfo, Website } from "@/types";
 
 interface HomePageProps {
   websites: Website[];
+  categories: CategoryInfo[];
 }
 
-function parseCategory(value: string | null): Category {
+function parseCategory(value: string | null, categories: CategoryInfo[]): Category {
   const valid = categories.map((c) => c.id);
-  if (value && valid.includes(value as Category)) {
-    return value as Category;
+  if (value && valid.includes(value)) {
+    return value;
   }
   return "all";
 }
@@ -39,7 +39,7 @@ function parseSort(value: string | null): SortOption {
   return "featured";
 }
 
-export function HomePage({ websites }: HomePageProps) {
+export function HomePage({ websites, categories }: HomePageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -60,10 +60,10 @@ export function HomePage({ websites }: HomePageProps) {
 
   useEffect(() => {
     setSearchQuery(searchParams.get("q") ?? "");
-    setActiveCategory(parseCategory(searchParams.get("category")));
+    setActiveCategory(parseCategory(searchParams.get("category"), categories));
     setSort(parseSort(searchParams.get("sort")));
     setInitialized(true);
-  }, [searchParams]);
+  }, [searchParams, categories]);
 
   const syncUrl = useCallback(
     (q: string, category: Category, sortBy: SortOption) => {

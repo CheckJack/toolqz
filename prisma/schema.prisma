@@ -59,6 +59,19 @@ model Tool {
   slugRedirects ToolSlugRedirect[]
 }
 
+model ToolCategory {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  label       String
+  description String?
+  sortOrder   Int      @default(0)
+  published   Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([published, sortOrder])
+}
+
 model ToolSlugRedirect {
   id        String   @id @default(cuid())
   oldSlug   String   @unique

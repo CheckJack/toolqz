@@ -1,6 +1,7 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { affiliatePrograms } from "./data/affiliate-programs";
+import { defaultToolCategories } from "./data/tool-categories";
 import { websites } from "../src/data/websites";
 import {
   fiveProductivityAppsContent,
@@ -59,6 +60,23 @@ async function main() {
       role: "MEMBER",
     },
   });
+
+  for (const category of defaultToolCategories) {
+    await prisma.toolCategory.upsert({
+      where: { slug: category.slug },
+      update: {
+        label: category.label,
+        sortOrder: category.sortOrder,
+        published: true,
+      },
+      create: {
+        slug: category.slug,
+        label: category.label,
+        sortOrder: category.sortOrder,
+        published: true,
+      },
+    });
+  }
 
   const slugToId: Record<string, string> = {};
   const nameToId: Record<string, string> = {};

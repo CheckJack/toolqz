@@ -1,15 +1,4 @@
-export type Category =
-  | "all"
-  | "productivity"
-  | "food"
-  | "digital"
-  | "marketing"
-  | "finance"
-  | "gambling"
-  | "health"
-  | "education"
-  | "entertainment"
-  | "shopping";
+export type Category = "all" | string;
 
 export interface HowItWorksStep {
   step: number;
@@ -36,7 +25,7 @@ export interface Website {
   overview: string;
   highlights: string[];
   url: string;
-  category: Exclude<Category, "all">;
+  category: string;
   tags: string[];
   featured?: boolean;
   rating?: number;

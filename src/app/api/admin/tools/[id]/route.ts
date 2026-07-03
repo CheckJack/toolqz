@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { assertToolCategoryExists } from "@/lib/categories";
 import { handleAuthError } from "@/lib/api-errors";
 import { logAudit } from "@/lib/audit-log";
 import { requireAdmin, requireSession } from "@/lib/auth";
@@ -79,6 +80,17 @@ export async function PATCH(
         `/${existing.slug} → /${body.slug}`,
         { userId: session.id, entityId: id }
       );
+    }
+
+    if (body.category !== undefined) {
+      try {
+        await assertToolCategoryExists(String(body.category));
+      } catch (error) {
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : "Invalid category" },
+          { status: 400 }
+        );
+      }
     }
 
     const tool = await prisma.tool.update({

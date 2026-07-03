@@ -1,4 +1,5 @@
-export function getCategoryLabel(category: string): string {
+export function getCategoryLabel(category: string, labels?: Record<string, string>): string {
+  if (labels?.[category]) return labels[category];
   return category.charAt(0).toUpperCase() + category.slice(1);
 }
 

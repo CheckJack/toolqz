@@ -4,6 +4,7 @@ import {
   parseToolFilters,
   toolOrderBy,
 } from "@/lib/tool-query";
+import { assertToolCategoryExists } from "@/lib/categories";
 import { logAudit } from "@/lib/audit-log";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest) {
     );
     const orderBy = toolOrderBy(sort);
 
-    const [items, total, categoryRows] = await Promise.all([
+    const [items, total, dbCategories] = await Promise.all([
       prisma.tool.findMany({
         where,
         include: toolInclude,
@@ -47,13 +48,13 @@ export async function GET(request: NextRequest) {
         take: pageSize,
       }),
       prisma.tool.count({ where }),
-      prisma.tool.groupBy({
-        by: ["category"],
-        _count: true,
+      prisma.toolCategory.findMany({
+        orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
+        select: { slug: true, label: true },
       }),
     ]);
 
-    const categories = categoryRows.map((r) => r.category).sort();
+    const categories = dbCategories.map((row) => row.slug);
 
     return NextResponse.json({
       items: items.map(serializeTool),
@@ -61,6 +62,7 @@ export async function GET(request: NextRequest) {
       page,
       pageSize,
       categories,
+      categoryLabels: Object.fromEntries(dbCategories.map((row) => [row.slug, row.label])),
     });
   } catch {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -75,6 +77,15 @@ export async function POST(request: NextRequest) {
     if (!body.slug || !body.name || !body.description || !body.url || !body.category) {
       return NextResponse.json(
         { error: "slug, name, description, url, and category are required" },
+        { status: 400 }
+      );
+    }
+
+    try {
+      await assertToolCategoryExists(String(body.category));
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Invalid category" },
         { status: 400 }
       );
     }

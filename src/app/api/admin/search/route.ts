@@ -7,6 +7,7 @@ const STATIC_PAGES = [
   { id: "page-dashboard", label: "Dashboard", href: "/admin" },
   { id: "page-analytics", label: "Click Analytics", href: "/admin/analytics" },
   { id: "page-tools", label: "Tools", href: "/admin/tools" },
+  { id: "page-categories", label: "Categories", href: "/admin/categories" },
   { id: "page-crm", label: "Affiliate CRM", href: "/admin/affiliates" },
   { id: "page-finances", label: "Finances", href: "/admin/finances" },
   { id: "page-messages", label: "Messages", href: "/admin/messages" },
