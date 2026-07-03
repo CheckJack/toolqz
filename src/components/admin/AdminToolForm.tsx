@@ -2,6 +2,7 @@
 
 import type { FaqItem, HowItWorksStep, PricingTier } from "@/types";
 import type { AdminTool } from "@/lib/tool-payload";
+import { DateInput } from "@/components/admin/DateInput";
 import { DragHandle, useListDragReorder } from "@/components/admin/DraggableReorder";
 import { moveItem } from "@/lib/list-reorder";
 
@@ -494,7 +495,11 @@ export function AdminToolForm({ form, onChange, isNew, isAdmin = true, originalS
           </div>
           <div>
             <label className="mb-1 block text-sm text-muted">Last reviewed</label>
-            <input className={inputClass} type="date" value={form.lastReviewed} onChange={(e) => set("lastReviewed", e.target.value)} />
+            <DateInput
+              className={inputClass}
+              value={form.lastReviewed}
+              onChange={(value) => set("lastReviewed", value)}
+            />
           </div>
           <div className="flex flex-wrap gap-4 sm:col-span-2">
             <label className={`flex items-center gap-2 text-sm ${!isAdmin ? "opacity-70" : ""}`}>
