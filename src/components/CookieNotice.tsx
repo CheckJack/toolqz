@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { getCookieConsent, setCookieConsent } from "@/lib/cookies";
+import { dispatchAnalyticsConsent } from "@/lib/analytics";
 import { BOTTOM_CHROME_VARS, setBottomChromeHeight } from "@/lib/bottom-chrome";
 
 export function CookieNotice() {
@@ -41,6 +42,7 @@ export function CookieNotice() {
 
   function accept() {
     setCookieConsent();
+    dispatchAnalyticsConsent();
     setVisible(false);
   }
 

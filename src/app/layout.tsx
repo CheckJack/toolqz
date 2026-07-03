@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { CookieNotice } from "@/components/CookieNotice";
+import { GoogleAnalytics } from "@/components/GoogleAnalytics";
 import { NewsletterPopup } from "@/components/NewsletterPopup";
 import { SiteBackground } from "@/components/SiteBackground";
 import { PublicContent } from "@/components/PublicContent";
@@ -64,6 +66,9 @@ export default function RootLayout({
         <ThemeProvider>
           <SiteBackground />
           <PublicContent>{children}</PublicContent>
+          <Suspense fallback={null}>
+            <GoogleAnalytics />
+          </Suspense>
           <CookieNotice />
           <NewsletterPopup />
         </ThemeProvider>
