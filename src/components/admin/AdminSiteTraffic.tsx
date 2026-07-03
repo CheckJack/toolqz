@@ -17,6 +17,15 @@ interface SiteTrafficData {
   topSources: { source: string; sessions: number }[];
 }
 
+interface Ga4Status {
+  propertyId: boolean;
+  credentialSource: string;
+  clientEmail: string | null;
+  privateKeyValid: boolean;
+  ready: boolean;
+  hint: string | null;
+}
+
 const RANGES = [
   { value: "7d", label: "Last 7 days" },
   { value: "30d", label: "Last 30 days" },
@@ -34,11 +43,19 @@ export function AdminSiteTraffic() {
     initialRange && RANGES.some((r) => r.value === initialRange) ? initialRange : "30d"
   );
   const [data, setData] = useState<SiteTrafficData | null>(null);
+  const [status, setStatus] = useState<Ga4Status | null>(null);
   const [error, setError] = useState("");
 
   function loadData() {
     setData(null);
     setError("");
+    setStatus(null);
+
+    fetch("/api/admin/site-analytics/status")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => body && setStatus(body))
+      .catch(() => {});
+
     fetch(`/api/admin/site-analytics?range=${range}`)
       .then(async (r) => {
         if (!r.ok) {
@@ -56,10 +73,45 @@ export function AdminSiteTraffic() {
   }, [range]);
 
   if (error) {
+    const isConfig =
+      error.includes("PEM") ||
+      error.includes("private key") ||
+      error.includes("GA4_") ||
+      error.includes("malformed");
     return (
       <div className="rounded-2xl border border-red-500/30 p-6 text-center text-red-400">
-        {error}
-        <button onClick={loadData} className="mt-2 block w-full text-sm text-neon">
+        <p>{error}</p>
+        {status && (
+          <div className="mt-4 rounded-xl border border-dark-border bg-dark p-4 text-left text-sm text-muted">
+            <p>Property ID: {status.propertyId ? "✓ set" : "✗ missing"}</p>
+            <p>Credential source: {status.credentialSource}</p>
+            <p>Private key valid: {status.privateKeyValid ? "✓ yes" : "✗ no"}</p>
+            {status.clientEmail && <p>Service account: {status.clientEmail}</p>}
+          </div>
+        )}
+        {isConfig && (
+          <div className="mt-3 space-y-2 text-left text-sm text-muted">
+            <p className="font-medium text-white">Fix on Hostinger:</p>
+            <ol className="list-decimal space-y-1 pl-5">
+              <li>
+                Delete <code className="text-white">GA4_PRIVATE_KEY</code> and{" "}
+                <code className="text-white">GA4_CLIENT_EMAIL</code> if present.
+              </li>
+              <li>
+                On your Mac run:{" "}
+                <code className="text-white">
+                  npm run ga4:env -- ~/Downloads/toolqz-analytics-dc7a4502a703.json
+                </code>
+              </li>
+              <li>
+                Paste <code className="text-white">GA4_CREDENTIALS_BASE64</code> into Hostinger env
+                vars (keep <code className="text-white">GA4_PROPERTY_ID=544145954</code>).
+              </li>
+              <li>Redeploy the Node.js app.</li>
+            </ol>
+          </div>
+        )}
+        <button onClick={loadData} className="mt-4 block w-full text-sm text-neon">
           Retry
         </button>
       </div>

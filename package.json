@@ -19,6 +19,12 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:setup": "prisma migrate deploy && tsx prisma/seed.ts",
     "db:studio": "prisma studio",
+    "hostinger": "node scripts/hostinger.mjs",
+    "hostinger:websites": "node scripts/hostinger.mjs websites",
+    "hostinger:builds": "node scripts/hostinger.mjs builds",
+    "hostinger:logs": "node scripts/hostinger.mjs logs",
+    "hostinger:setup-mcp": "node scripts/hostinger.mjs setup-mcp",
+    "ga4:env": "node scripts/ga4-env-oneline.mjs",
     "postinstall": "node scripts/sync-prisma-provider.mjs && prisma generate"
   },
   "prisma": {

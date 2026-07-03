@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleAuthError } from "@/lib/api-errors";
 import { requireSession } from "@/lib/auth";
-import { fetchGa4SiteReport, type Ga4Range } from "@/lib/ga4-server";
+import { fetchGa4SiteReport, Ga4ConfigError, type Ga4Range } from "@/lib/ga4-server";
 
 const RANGES = new Set<Ga4Range>(["7d", "30d", "90d", "all"]);
 
@@ -20,7 +20,13 @@ export async function GET(request: NextRequest) {
     ) {
       return handleAuthError(error);
     }
-    const message = error instanceof Error ? error.message : "GA4 request failed";
-    return NextResponse.json({ error: message }, { status: 502 });
+    if (error instanceof Ga4ConfigError) {
+      return NextResponse.json({ error: error.message }, { status: 502 });
+    }
+    const raw = error instanceof Error ? error.message : "GA4 request failed";
+    const friendly = raw.includes("PEM routines") || raw.includes("no start line")
+      ? "GA4 private key is malformed on the server. Set GA4_CREDENTIALS_JSON (one-line JSON) in Hostinger env vars and redeploy. Remove GA4_PRIVATE_KEY if present."
+      : raw;
+    return NextResponse.json({ error: friendly }, { status: 502 });
   }
 }
