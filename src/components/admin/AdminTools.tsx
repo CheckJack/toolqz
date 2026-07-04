@@ -23,6 +23,13 @@ const statusColors: Record<string, string> = {
 };
 
 type SortKey = "name" | "clicks" | "updated";
+type PublishTab = "" | "published" | "draft";
+
+const PUBLISH_TABS: { value: PublishTab; label: string }[] = [
+  { value: "", label: "All" },
+  { value: "published", label: "Published" },
+  { value: "draft", label: "Drafts" },
+];
 
 export function AdminTools({ user }: { user: SessionUser }) {
   const isAdmin = user.role === "ADMIN";
@@ -31,6 +38,7 @@ export function AdminTools({ user }: { user: SessionUser }) {
   const { toast } = useToast();
   const [tools, setTools] = useState<AdminTool[]>([]);
   const [total, setTotal] = useState(0);
+  const [tabCounts, setTabCounts] = useState({ all: 0, published: 0, draft: 0 });
   const [categories, setCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -100,6 +108,7 @@ export function AdminTools({ user }: { user: SessionUser }) {
       const data = await res.json();
       setTools(data.items ?? []);
       setTotal(data.total ?? 0);
+      setTabCounts(data.counts ?? { all: data.total ?? 0, published: 0, draft: 0 });
       setCategories(data.categories ?? []);
     } catch {
       setLoadError("Failed to load tools");
@@ -185,6 +194,24 @@ export function AdminTools({ user }: { user: SessionUser }) {
     return null;
   }
 
+  function setPublishTab(value: PublishTab) {
+    setPublishedFilter(value);
+    syncParams({ publishedFilter: value, page: "" });
+  }
+
+  function tabCount(value: PublishTab): number {
+    if (value === "published") return tabCounts.published;
+    if (value === "draft") return tabCounts.draft;
+    return tabCounts.all;
+  }
+
+  const listLabel =
+    publishedFilter === "published"
+      ? "published"
+      : publishedFilter === "draft"
+        ? "draft"
+        : "";
+
   if (loading) return <AdminSkeleton rows={8} />;
 
   if (loadError) {
@@ -203,7 +230,7 @@ export function AdminTools({ user }: { user: SessionUser }) {
       <AdminPageHeader
         hideTitle
         title="Tools"
-        description={`${total} tool${total === 1 ? "" : "s"}${total !== tools.length ? ` · showing ${tools.length} on this page` : ""}`}
+        description={`${total} ${listLabel ? `${listLabel} ` : ""}tool${total === 1 ? "" : "s"}${total !== tools.length ? ` · showing ${tools.length} on this page` : ""}`}
         action={
           <Link href="/admin/tools/new" className="admin-btn-primary">
             + Add tool
@@ -211,7 +238,35 @@ export function AdminTools({ user }: { user: SessionUser }) {
         }
       />
 
-      <div className="grid gap-3 rounded-xl border border-dark-border bg-dark-elevated p-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="flex flex-wrap gap-2">
+        {PUBLISH_TABS.map((tab) => {
+          const active = publishedFilter === tab.value;
+          const count = tabCount(tab.value);
+          return (
+            <button
+              key={tab.label}
+              type="button"
+              onClick={() => setPublishTab(tab.value)}
+              className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-[13px] font-medium transition ${
+                active
+                  ? "border-border-hover bg-white text-ink"
+                  : "border-dark-border bg-dark-elevated text-muted hover:border-border-hover hover:text-white"
+              }`}
+            >
+              {tab.label}
+              <span
+                className={`rounded-md px-1.5 py-0.5 text-[11px] tabular-nums ${
+                  active ? "bg-ink/10 text-ink" : "bg-dark text-muted-dim"
+                }`}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-3 rounded-xl border border-dark-border bg-dark-elevated p-4 sm:grid-cols-2 lg:grid-cols-4">
         <input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
@@ -230,18 +285,6 @@ export function AdminTools({ user }: { user: SessionUser }) {
           {categories.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
-        </select>
-        <select
-          value={publishedFilter}
-          onChange={(e) => {
-            setPublishedFilter(e.target.value);
-            syncParams({ publishedFilter: e.target.value, page: "" });
-          }}
-          className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white"
-        >
-          <option value="">All statuses</option>
-          <option value="published">Published</option>
-          <option value="draft">Draft / hidden</option>
         </select>
         <select
           value={affiliateFilter}
@@ -263,7 +306,7 @@ export function AdminTools({ user }: { user: SessionUser }) {
             setSort(v);
             syncParams({ sort: v, page: "" });
           }}
-          className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white lg:col-span-1"
+          className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:col-span-2 lg:col-span-1"
         >
           <option value="name">Sort: name</option>
           <option value="clicks">Sort: clicks</option>
@@ -272,8 +315,14 @@ export function AdminTools({ user }: { user: SessionUser }) {
       </div>
 
       {tools.length === 0 ? (
-        <div className="rounded-2xl border border-dark-border bg-dark-elevated p-12 text-center">
-          <p className="text-muted">No tools match your filters.</p>
+        <div className="admin-card admin-card-pad text-center">
+          <p className="text-muted">
+            {publishedFilter === "draft"
+              ? "No draft tools match your filters."
+              : publishedFilter === "published"
+                ? "No published tools match your filters."
+                : "No tools match your filters."}
+          </p>
           <button
             onClick={() => {
               setSearchInput("");
@@ -283,7 +332,7 @@ export function AdminTools({ user }: { user: SessionUser }) {
               setAffiliateFilter("");
               router.replace("/admin/tools", { scroll: false });
             }}
-            className="mt-3 text-sm text-neon hover:underline"
+            className="admin-link-accent mt-3"
           >
             Clear filters
           </button>

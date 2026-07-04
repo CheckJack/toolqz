@@ -73,7 +73,7 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
-  const { isSupported, isListening, interimTranscript, startListening, stopListening } =
+  const { isSupported, isListening, liveTranscript, speechError, startListening, stopListening, consumeTranscript, clearSpeechError } =
     useSpeechRecognition();
 
   useEffect(() => {
@@ -87,7 +87,11 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading, interimTranscript]);
+  }, [messages, loading, liveTranscript]);
+
+  useEffect(() => {
+    if (speechError) setError(speechError);
+  }, [speechError]);
 
   const send = useCallback(
     async (text: string) => {
@@ -163,32 +167,44 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
   );
 
   function toggleMic() {
+    clearSpeechError();
     if (isListening) {
       stopListening();
+      const spoken = consumeTranscript();
+      if (spoken) {
+        setInput((prev) => (prev.trim() ? `${prev.trim()} ${spoken}` : spoken));
+      }
+      inputRef.current?.focus();
       return;
     }
-    const started = startListening((finalText) => {
-      setInput(finalText);
-      void send(finalText);
-    });
-    if (!started) setError("Voice input is not supported in this browser. Try Chrome or Safari.");
+
+    const started = startListening();
+    if (!started) {
+      setError("Voice input is not supported in this browser. Try Chrome or Safari.");
+    }
   }
 
   function clearChat() {
     stopSpeaking();
     stopListening();
+    consumeTranscript();
+    clearSpeechError();
     setMessages([WELCOME]);
     setInput("");
     setError("");
   }
 
+  const composerValue = isListening
+    ? [input, liveTranscript].filter(Boolean).join(input && liveTranscript ? " " : "")
+    : input;
+  const canSend = !loading && ready !== false && !isListening && composerValue.trim().length > 0;
+
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    void send(input);
+    if (canSend) void send(composerValue);
   }
 
   const isWidget = variant === "widget";
-  const inputValue = isListening && interimTranscript ? interimTranscript : input;
 
   return (
     <div className={`flex min-h-0 flex-col ${className}`}>
@@ -358,22 +374,29 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
           </button>
           <textarea
             ref={inputRef}
-            value={inputValue}
-            onChange={(e) => setInput(e.target.value)}
+            value={composerValue}
+            onChange={(e) => {
+              if (!isListening) setInput(e.target.value);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
-                void send(input);
+                if (canSend) void send(composerValue);
               }
             }}
             rows={1}
-            disabled={loading || ready === false || isListening}
-            placeholder={isListening ? "Listening…" : "Message TOOLQZ assistant…"}
-            className="max-h-28 min-h-[2.5rem] flex-1 resize-none border-0 bg-transparent px-1 py-2.5 text-sm leading-5 text-white placeholder:text-muted focus:outline-none focus:ring-0 disabled:opacity-50"
+            readOnly={isListening}
+            disabled={loading || ready === false}
+            placeholder={
+              isListening ? "Listening… tap mic when done, then Send" : "Message TOOLQZ assistant…"
+            }
+            className={`max-h-28 min-h-[2.5rem] flex-1 resize-none border-0 bg-transparent px-1 py-2.5 text-sm leading-5 text-white placeholder:text-muted focus:outline-none focus:ring-0 disabled:opacity-50 ${
+              isListening ? "cursor-default" : ""
+            }`}
           />
           <button
             type="submit"
-            disabled={loading || !input.trim() || ready === false || isListening}
+            disabled={!canSend}
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-neon text-ink transition hover:bg-neon-dim disabled:opacity-40 disabled:hover:bg-neon"
             aria-label="Send message"
           >
@@ -384,7 +407,9 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
         </div>
         <p className="mt-2 px-1 text-center text-[10px] leading-relaxed text-muted">
           {isSupported
-            ? "Enter to send · Shift+Enter for new line · Mic is free (browser)"
+            ? isListening
+              ? "Speak, then tap mic to finish · review text · Send"
+              : "Enter to send · Shift+Enter for new line · Mic fills the box first"
             : "Use Chrome or Edge for voice input"}
         </p>
       </form>

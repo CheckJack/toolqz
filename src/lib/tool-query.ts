@@ -40,6 +40,17 @@ export function buildToolWhere(filters: ToolListFilters): Prisma.ToolWhereInput 
   return where;
 }
 
+/** Base filters for publish-status tab counts (search + category only). */
+export function buildToolTabCountWhere(
+  filters: Pick<ToolListFilters, "search" | "category">
+): Prisma.ToolWhereInput {
+  return buildToolWhere({
+    ...filters,
+    publishedFilter: null,
+    affiliateFilter: null,
+  });
+}
+
 export function parseToolFilters(searchParams: URLSearchParams): ToolListFilters {
   return {
     search: searchParams.get("search"),

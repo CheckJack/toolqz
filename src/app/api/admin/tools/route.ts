@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
+  buildToolTabCountWhere,
   buildToolWhere,
   parseToolFilters,
   toolOrderBy,
@@ -32,6 +33,7 @@ export async function GET(request: NextRequest) {
 
     const filters = parseToolFilters(searchParams);
     const where = buildToolWhere(filters);
+    const tabCountWhere = buildToolTabCountWhere(filters);
     const sort = searchParams.get("sort") ?? "name";
     const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
     const pageSize = Math.min(
@@ -40,7 +42,7 @@ export async function GET(request: NextRequest) {
     );
     const orderBy = toolOrderBy(sort);
 
-    const [items, total, categoryFilters] = await Promise.all([
+    const [items, total, publishedCount, draftCount, categoryFilters] = await Promise.all([
       prisma.tool.findMany({
         where,
         include: toolInclude,
@@ -49,12 +51,19 @@ export async function GET(request: NextRequest) {
         take: pageSize,
       }),
       prisma.tool.count({ where }),
+      prisma.tool.count({ where: { ...tabCountWhere, published: true } }),
+      prisma.tool.count({ where: { ...tabCountWhere, published: false } }),
       listToolCategoryFilters(),
     ]);
 
     return NextResponse.json({
       items: items.map(serializeTool),
       total,
+      counts: {
+        all: publishedCount + draftCount,
+        published: publishedCount,
+        draft: draftCount,
+      },
       page,
       pageSize,
       categories: categoryFilters.slugs,
