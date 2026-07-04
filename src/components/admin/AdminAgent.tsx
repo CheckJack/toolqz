@@ -23,17 +23,18 @@ export function AdminAgent() {
             <strong className="text-white">Talk or type</strong> — mic button uses your browser (free)
           </li>
           <li>
-            <strong className="text-white">Tools</strong> — create or refresh draft listings from a URL
+            <strong className="text-white">Tools</strong> — create, update, publish, or delete listings
           </li>
           <li>
-            <strong className="text-white">Blog</strong> — generate an unpublished post from a topic
+            <strong className="text-white">Affiliates</strong> — search CRM programs and create linked tool drafts
           </li>
           <li>
-            <strong className="text-white">Categories</strong> — add new tool categories
+            <strong className="text-white">Analytics</strong> — clicks, top tools, referrers
           </li>
           <li>
-            <strong className="text-white">List &amp; search</strong> — ask what&apos;s in the directory
+            <strong className="text-white">Blog &amp; categories</strong> — draft posts and new categories
           </li>
+          <li>Publish/delete always ask for your confirmation first</li>
           <li>Team messages: Admin → Messages</li>
         </ul>
       </div>

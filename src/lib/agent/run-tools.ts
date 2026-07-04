@@ -2,7 +2,9 @@ import { assertToolCategoryExists, categorySlugify, listToolCategoryFilters } fr
 import { logAudit } from "@/lib/audit-log";
 import { buildBlogData, serializeBlogPost } from "@/lib/blog-payload";
 import { prisma } from "@/lib/db";
+import { createToolFromAffiliateProgram } from "@/lib/tool-from-affiliate";
 import { buildToolData, serializeTool } from "@/lib/tool-payload";
+import { getAgentAnalyticsSummary } from "./analytics-summary";
 import { researchBlogDraft } from "./blog-research";
 import { saveAgentToolDraft } from "./create-tool";
 import type { AgentChatResult, AgentToolName } from "./definitions";
@@ -28,6 +30,51 @@ async function findTool(args: Record<string, unknown>) {
     });
   }
   return null;
+}
+
+async function findAffiliate(args: Record<string, unknown>) {
+  const id = typeof args.affiliate_id === "string" ? args.affiliate_id.trim() : "";
+  const companyName =
+    typeof args.company_name === "string" ? args.company_name.trim() : "";
+
+  if (id) {
+    return prisma.affiliateProgram.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        companyName: true,
+        status: true,
+        toolId: true,
+        website: true,
+        affiliateUrl: true,
+      },
+    });
+  }
+
+  if (companyName) {
+    return prisma.affiliateProgram.findFirst({
+      where: { companyName: { contains: companyName } },
+      select: {
+        id: true,
+        companyName: true,
+        status: true,
+        toolId: true,
+        website: true,
+        affiliateUrl: true,
+      },
+      orderBy: { companyName: "asc" },
+    });
+  }
+
+  return null;
+}
+
+function needsConfirmation(
+  confirm: unknown,
+  preview: Record<string, unknown>
+): { needsConfirmation: true } & Record<string, unknown> | null {
+  if (confirm === true) return null;
+  return { needsConfirmation: true, ...preview };
 }
 
 export async function executeAgentTool(
@@ -201,6 +248,166 @@ export async function executeAgentTool(
     return {
       result: { success: true, name: serialized.name, slug: serialized.slug },
       links: [{ label: `Open: ${serialized.name}`, href: `/admin/tools/${updated.id}` }],
+    };
+  }
+
+  if (name === "publish_tool") {
+    const tool = await findTool(args);
+    if (!tool) {
+      throw new Error("Tool not found — provide tool_slug, tool_name, or tool_id");
+    }
+
+    const published = args.published !== false;
+    const action = published ? "publish" : "unpublish";
+    const preview = needsConfirmation(args.confirm, {
+      action,
+      tool: { id: tool.id, name: tool.name, slug: tool.slug, currentlyPublished: tool.published },
+      message: published
+        ? `This will make "${tool.name}" visible on the public site.`
+        : `This will hide "${tool.name}" from the public site.`,
+    });
+    if (preview) return { result: preview };
+
+    if (tool.published === published) {
+      return {
+        result: {
+          success: true,
+          alreadyInState: true,
+          name: tool.name,
+          published: tool.published,
+        },
+      };
+    }
+
+    const updated = await prisma.tool.update({
+      where: { id: tool.id },
+      data: { published },
+      include: toolInclude,
+    });
+
+    await logAudit(
+      published ? "publish" : "unpublish",
+      "tool",
+      `${published ? "Published" : "Unpublished"} "${updated.name}" via assistant`,
+      { userId, entityId: updated.id }
+    );
+
+    const serialized = serializeTool(updated);
+    return {
+      result: { success: true, name: serialized.name, slug: serialized.slug, published },
+      links: [{ label: serialized.name, href: `/admin/tools/${updated.id}` }],
+    };
+  }
+
+  if (name === "delete_tool") {
+    const tool = await findTool(args);
+    if (!tool) {
+      throw new Error("Tool not found — provide tool_slug, tool_name, or tool_id");
+    }
+
+    const preview = needsConfirmation(args.confirm, {
+      action: "delete",
+      tool: {
+        id: tool.id,
+        name: tool.name,
+        slug: tool.slug,
+        published: tool.published,
+        clicks: tool._count.clicks,
+      },
+      message: `This permanently deletes "${tool.name}" and cannot be undone.`,
+    });
+    if (preview) return { result: preview };
+
+    await prisma.tool.delete({ where: { id: tool.id } });
+
+    await logAudit("delete", "tool", `Deleted tool "${tool.name}" via assistant`, {
+      userId,
+      entityId: tool.id,
+    });
+
+    return {
+      result: { success: true, deleted: tool.name, slug: tool.slug },
+    };
+  }
+
+  if (name === "list_affiliates") {
+    const search = typeof args.search === "string" ? args.search.trim() : "";
+    const status = typeof args.status === "string" ? args.status.trim() : "";
+    const withoutTool = args.without_tool === true;
+    const limit = Math.min(30, Math.max(1, Number(args.limit) || 15));
+
+    const where = {
+      ...(search ? { companyName: { contains: search } } : {}),
+      ...(status ? { status } : {}),
+      ...(withoutTool ? { toolId: null } : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      prisma.affiliateProgram.findMany({
+        where,
+        select: {
+          id: true,
+          companyName: true,
+          status: true,
+          toolId: true,
+          affiliateUrl: true,
+          website: true,
+        },
+        orderBy: { updatedAt: "desc" },
+        take: limit,
+      }),
+      prisma.affiliateProgram.count({ where }),
+    ]);
+
+    return {
+      result: {
+        total,
+        showing: items.length,
+        affiliates: items.map((a) => ({
+          id: a.id,
+          companyName: a.companyName,
+          status: a.status,
+          hasTool: !!a.toolId,
+          hasAffiliateUrl: !!a.affiliateUrl,
+          editUrl: `/admin/affiliates/${a.id}`,
+        })),
+      },
+      links: items.length
+        ? [{ label: "Open affiliates CRM", href: "/admin/affiliates" }]
+        : undefined,
+    };
+  }
+
+  if (name === "create_tool_from_affiliate") {
+    const affiliate = await findAffiliate(args);
+    if (!affiliate) {
+      throw new Error("Affiliate not found — provide affiliate_id or company_name");
+    }
+
+    const tool = await createToolFromAffiliateProgram(affiliate.id, userId);
+
+    return {
+      result: {
+        success: true,
+        affiliate: affiliate.companyName,
+        toolId: tool.id,
+        name: tool.name,
+        slug: tool.slug,
+      },
+      links: [{ label: `Open draft: ${tool.name}`, href: `/admin/tools/${tool.id}` }],
+    };
+  }
+
+  if (name === "get_analytics") {
+    const rangeInput = typeof args.range === "string" ? args.range.trim() : "30d";
+    const range = ["7d", "30d", "90d", "all"].includes(rangeInput) ? rangeInput : "30d";
+    const toolSlug = typeof args.tool_slug === "string" ? args.tool_slug.trim() : undefined;
+
+    const summary = await getAgentAnalyticsSummary(range, toolSlug || undefined);
+
+    return {
+      result: summary,
+      links: [{ label: "Full analytics", href: "/admin/analytics" }],
     };
   }
 

@@ -23,14 +23,14 @@ const WELCOME: AssistantMessage = {
   id: "welcome",
   role: "assistant",
   content:
-    "Hi — I'm your TOOLQZ assistant. I can create draft tool listings from a website URL, or list and count tools in your directory. Tap the mic to talk, or type below.",
+    "Hi — I'm your TOOLQZ assistant. I can create tools from URLs, manage affiliates, check analytics, publish or delete listings (with your confirmation), and more. Tap the mic to talk, or type below.",
 };
 
 const QUICK_PROMPTS = [
-  { label: "List tools", text: "List all tools" },
+  { label: "Analytics", text: "Show click analytics for the last 30 days" },
+  { label: "List tools", text: "List all published tools" },
+  { label: "Affiliates", text: "List affiliate programs without a tool" },
   { label: "New tool", text: "Create a tool for Notion at https://notion.so" },
-  { label: "Blog draft", text: "Write a blog draft about the best productivity tools in 2026" },
-  { label: "New category", text: "Create a category called AI Tools" },
 ];
 
 interface Props {
@@ -104,13 +104,21 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
       setInput("");
       setLoading(true);
       setLoadingHint(
-        trimmed.toLowerCase().includes("blog")
-          ? "Writing blog draft…"
-          : trimmed.toLowerCase().includes("create") || trimmed.includes("http")
-            ? "Researching and drafting…"
-            : trimmed.toLowerCase().includes("update") || trimmed.toLowerCase().includes("refresh")
-              ? "Refreshing tool from website…"
-              : "Thinking…"
+        trimmed.toLowerCase().includes("analytics") || trimmed.toLowerCase().includes("clicks")
+          ? "Loading analytics…"
+          : trimmed.toLowerCase().includes("affiliate")
+            ? "Searching affiliates…"
+            : trimmed.toLowerCase().includes("blog")
+              ? "Writing blog draft…"
+              : trimmed.toLowerCase().includes("delete")
+                ? "Preparing delete…"
+                : trimmed.toLowerCase().includes("publish")
+                  ? "Checking tool…"
+                  : trimmed.toLowerCase().includes("create") || trimmed.includes("http")
+                    ? "Researching and drafting…"
+                    : trimmed.toLowerCase().includes("update") || trimmed.toLowerCase().includes("refresh")
+                      ? "Refreshing tool from website…"
+                      : "Thinking…"
       );
 
       try {

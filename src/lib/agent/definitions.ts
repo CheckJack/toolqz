@@ -71,6 +71,95 @@ export const AGENT_FUNCTION_DECLARATIONS = [
       required: ["topic"],
     },
   },
+  {
+    name: "publish_tool",
+    description:
+      "Publish or unpublish a tool listing. Always call first with confirm:false to preview; only set confirm:true after the user explicitly agrees.",
+    parameters: {
+      type: "object",
+      properties: {
+        tool_slug: { type: "string" },
+        tool_name: { type: "string" },
+        tool_id: { type: "string" },
+        published: {
+          type: "boolean",
+          description: "true to publish, false to unpublish (default true)",
+        },
+        confirm: {
+          type: "boolean",
+          description: "Must be true to execute. Use false first to preview.",
+        },
+      },
+    },
+  },
+  {
+    name: "delete_tool",
+    description:
+      "Permanently delete a tool. Always call first with confirm:false to preview; only set confirm:true after the user explicitly agrees.",
+    parameters: {
+      type: "object",
+      properties: {
+        tool_slug: { type: "string" },
+        tool_name: { type: "string" },
+        tool_id: { type: "string" },
+        confirm: {
+          type: "boolean",
+          description: "Must be true to execute. Use false first to preview.",
+        },
+      },
+    },
+  },
+  {
+    name: "list_affiliates",
+    description: "List affiliate programs in the CRM.",
+    parameters: {
+      type: "object",
+      properties: {
+        search: { type: "string", description: "Company name search" },
+        status: {
+          type: "string",
+          description: "PENDING, IN_PROGRESS, ACTIVE, REJECTED, NOT_AVAILABLE",
+        },
+        without_tool: {
+          type: "boolean",
+          description: "Only programs not yet linked to a tool",
+        },
+        limit: { type: "number" },
+      },
+    },
+  },
+  {
+    name: "create_tool_from_affiliate",
+    description:
+      "Create a draft tool listing from an affiliate CRM program and link them.",
+    parameters: {
+      type: "object",
+      properties: {
+        affiliate_id: { type: "string", description: "Affiliate program ID" },
+        company_name: {
+          type: "string",
+          description: "Company name if ID unknown (searches CRM)",
+        },
+      },
+    },
+  },
+  {
+    name: "get_analytics",
+    description: "Get click analytics summary for the TOOLQZ directory.",
+    parameters: {
+      type: "object",
+      properties: {
+        range: {
+          type: "string",
+          description: "7d, 30d, 90d, or all (default 30d)",
+        },
+        tool_slug: {
+          type: "string",
+          description: "Optional — stats for one tool",
+        },
+      },
+    },
+  },
 ] as const;
 
 export type AgentToolName =
@@ -78,7 +167,12 @@ export type AgentToolName =
   | "update_tool"
   | "list_tools"
   | "create_category"
-  | "create_blog_draft";
+  | "create_blog_draft"
+  | "publish_tool"
+  | "delete_tool"
+  | "list_affiliates"
+  | "create_tool_from_affiliate"
+  | "get_analytics";
 
 export interface ChatLink {
   label: string;
