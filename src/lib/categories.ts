@@ -1,5 +1,26 @@
+import { DEFAULT_TOOL_CATEGORIES } from "@/lib/default-tool-categories";
 import { prisma } from "@/lib/db";
 import type { CategoryInfo } from "@/types";
+
+/** Ensure built-in categories exist (idempotent — safe on every request). */
+export async function ensureDefaultToolCategories(): Promise<void> {
+  try {
+    for (const category of DEFAULT_TOOL_CATEGORIES) {
+      await prisma.toolCategory.upsert({
+        where: { slug: category.slug },
+        create: {
+          slug: category.slug,
+          label: category.label,
+          sortOrder: category.sortOrder,
+          published: true,
+        },
+        update: {},
+      });
+    }
+  } catch {
+    // ToolCategory table may not exist until migrations run
+  }
+}
 
 export function categorySlugify(label: string): string {
   return label
@@ -15,6 +36,7 @@ export function getCategoryLabel(category: string, labels?: Record<string, strin
 }
 
 export async function getPublishedCategories(): Promise<CategoryInfo[]> {
+  await ensureDefaultToolCategories();
   try {
     const rows = await prisma.toolCategory.findMany({
       where: { published: true },
@@ -40,6 +62,7 @@ export async function listToolCategoryFilters(): Promise<{
   slugs: string[];
   labels: Record<string, string>;
 }> {
+  await ensureDefaultToolCategories();
   try {
     const rows = await prisma.toolCategory.findMany({
       orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
@@ -71,6 +94,7 @@ export async function getCategoryLabelMap(): Promise<Record<string, string>> {
 }
 
 export async function assertToolCategoryExists(slug: string): Promise<void> {
+  await ensureDefaultToolCategories();
   try {
     const category = await prisma.toolCategory.findUnique({ where: { slug } });
     if (!category) {
@@ -80,11 +104,15 @@ export async function assertToolCategoryExists(slug: string): Promise<void> {
     if (error instanceof Error && error.message.startsWith("Unknown category")) {
       throw error;
     }
-    // Table missing or DB error — allow legacy slug values until migrations complete
+    // Table missing — allow default slugs until migrations complete
+    if (!DEFAULT_TOOL_CATEGORIES.some((c) => c.slug === slug)) {
+      throw new Error(`Unknown category "${slug}". Create it under Admin → Categories first.`);
+    }
   }
 }
 
 export async function listAdminCategories() {
+  await ensureDefaultToolCategories();
   try {
     const categories = await prisma.toolCategory.findMany({
       orderBy: [{ sortOrder: "asc" }, { label: "asc" }],

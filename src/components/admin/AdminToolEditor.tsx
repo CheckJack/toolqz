@@ -215,6 +215,8 @@ export function AdminToolEditor({ id, user }: { id: string; user: SessionUser })
         <div className="mt-6 flex flex-wrap gap-3">
           <button
             type="submit"
+            name="save"
+            data-agent-field="save"
             disabled={saving}
             className="rounded-xl bg-neon px-5 py-2.5 text-sm font-semibold text-ink hover:bg-neon-dim disabled:opacity-50"
           >
