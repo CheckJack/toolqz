@@ -13,6 +13,7 @@ const navItems = [
   { href: "/admin", label: "Dashboard", badgeKey: null as null, adminOnly: false },
   { href: "/admin/analytics", label: "Analytics", badgeKey: null as null, adminOnly: false },
   { href: "/admin/hosting", label: "Hosting", badgeKey: null as null, adminOnly: true },
+  { href: "/admin/agent", label: "AI Agent", badgeKey: null as null, adminOnly: true },
   { href: "/admin/tools", label: "Tools", badgeKey: null as null, adminOnly: false },
   { href: "/admin/categories", label: "Categories", badgeKey: null as null, adminOnly: false },
   { href: "/admin/blog", label: "Blog", badgeKey: null as null, adminOnly: false },
@@ -92,6 +93,7 @@ function AdminShellInner({
     if (href === "/admin/affiliates")
       return pathname.startsWith("/admin/affiliates");
     if (href === "/admin/tools") return pathname.startsWith("/admin/tools");
+    if (href === "/admin/agent") return pathname.startsWith("/admin/agent");
     if (href === "/admin/blog") return pathname.startsWith("/admin/blog");
     if (href === "/admin/audit") return pathname.startsWith("/admin/audit");
     if (href === "/admin/messages") return pathname.startsWith("/admin/messages");
