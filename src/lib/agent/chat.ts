@@ -1,4 +1,5 @@
 import type { AgentChatResult, AgentToolName, ChatLink } from "./definitions";
+import type { AssistantCard } from "./assistant-cards";
 import { executeAgentTool } from "./run-tools";
 import {
   buildFunctionResponseContent,
@@ -23,6 +24,7 @@ You can:
 
 Rules:
 - Be concise and helpful.
+- When tools return lists or analytics, reply with ONE short sentence only — structured UI cards show the data. Never use markdown lists, bullets, or repeat numbers from tool results.
 - All creates are drafts unless publish_tool succeeds with confirm:true.
 - For publish_tool and delete_tool: ALWAYS call with confirm:false first, explain what will happen, and wait for the user to explicitly say yes/confirm before calling with confirm:true.
 - For update_tool, identify the tool by slug or name from the user's message.
@@ -37,6 +39,7 @@ export async function runAgentChat(
 ): Promise<AgentChatResult> {
   const extraContents: ReturnType<typeof buildFunctionResponseContent>[] = [];
   const links: ChatLink[] = [];
+  const cards: AssistantCard[] = [];
 
   let result = await runGeminiChatLoop(SYSTEM_INSTRUCTION, history, extraContents);
 
@@ -49,12 +52,13 @@ export async function runAgentChat(
       extraContents.push(buildModelFunctionCallContent(toolName, call.args));
 
       try {
-        const { result: toolResult, links: toolLinks } = await executeAgentTool(
+        const { result: toolResult, links: toolLinks, cards: toolCards } = await executeAgentTool(
           toolName,
           call.args,
           userId
         );
         if (toolLinks) links.push(...toolLinks);
+        if (toolCards) cards.push(...toolCards);
         extraContents.push(
           buildFunctionResponseContent(toolName, toolResult as Record<string, unknown>)
         );
@@ -78,5 +82,6 @@ export async function runAgentChat(
   return {
     reply,
     links: links.length > 0 ? links : undefined,
+    cards: cards.length > 0 ? cards : undefined,
   };
 }

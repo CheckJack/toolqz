@@ -4,6 +4,13 @@ import { buildBlogData, serializeBlogPost } from "@/lib/blog-payload";
 import { prisma } from "@/lib/db";
 import { createToolFromAffiliateProgram } from "@/lib/tool-from-affiliate";
 import { buildToolData, serializeTool } from "@/lib/tool-payload";
+import {
+  cardFromConfirmation,
+  cardsFromAffiliateList,
+  cardsFromAnalytics,
+  cardsFromToolList,
+  type AssistantCard,
+} from "./assistant-cards";
 import { getAgentAnalyticsSummary } from "./analytics-summary";
 import { researchBlogDraft } from "./blog-research";
 import { saveAgentToolDraft } from "./create-tool";
@@ -81,7 +88,7 @@ export async function executeAgentTool(
   name: AgentToolName,
   args: Record<string, unknown>,
   userId: string
-): Promise<{ result: unknown; links?: AgentChatResult["links"] }> {
+): Promise<{ result: unknown; links?: AgentChatResult["links"]; cards?: AssistantCard[] }> {
   if (name === "create_tool") {
     const url = String(args.url ?? "").trim();
     const toolName = typeof args.name === "string" ? args.name.trim() : undefined;
@@ -135,18 +142,19 @@ export async function executeAgentTool(
 
     const label = (slug: string) => categories.labels[slug] ?? slug;
 
+    const tools = items.map((t) => ({
+      name: t.name,
+      slug: t.slug,
+      category: label(t.category),
+      published: t.published,
+      editUrl: `/admin/tools/${t.id}`,
+    }));
+
+    const result = { total, showing: items.length, tools };
+
     return {
-      result: {
-        total,
-        showing: items.length,
-        tools: items.map((t) => ({
-          name: t.name,
-          slug: t.slug,
-          category: label(t.category),
-          published: t.published,
-          editUrl: `/admin/tools/${t.id}`,
-        })),
-      },
+      result,
+      cards: cardsFromToolList({ total, showing: items.length, tools }),
     };
   }
 
@@ -266,7 +274,12 @@ export async function executeAgentTool(
         ? `This will make "${tool.name}" visible on the public site.`
         : `This will hide "${tool.name}" from the public site.`,
     });
-    if (preview) return { result: preview };
+    if (preview) {
+      return {
+        result: preview,
+        cards: [cardFromConfirmation(preview)],
+      };
+    }
 
     if (tool.published === published) {
       return {
@@ -316,7 +329,12 @@ export async function executeAgentTool(
       },
       message: `This permanently deletes "${tool.name}" and cannot be undone.`,
     });
-    if (preview) return { result: preview };
+    if (preview) {
+      return {
+        result: preview,
+        cards: [cardFromConfirmation(preview)],
+      };
+    }
 
     await prisma.tool.delete({ where: { id: tool.id } });
 
@@ -359,19 +377,16 @@ export async function executeAgentTool(
       prisma.affiliateProgram.count({ where }),
     ]);
 
+    const affiliates = items.map((a) => ({
+      companyName: a.companyName,
+      status: a.status,
+      hasTool: !!a.toolId,
+      editUrl: `/admin/affiliates/${a.id}`,
+    }));
+
     return {
-      result: {
-        total,
-        showing: items.length,
-        affiliates: items.map((a) => ({
-          id: a.id,
-          companyName: a.companyName,
-          status: a.status,
-          hasTool: !!a.toolId,
-          hasAffiliateUrl: !!a.affiliateUrl,
-          editUrl: `/admin/affiliates/${a.id}`,
-        })),
-      },
+      result: { total, showing: items.length, affiliates },
+      cards: cardsFromAffiliateList({ total, showing: items.length, affiliates }),
       links: items.length
         ? [{ label: "Open affiliates CRM", href: "/admin/affiliates" }]
         : undefined,
@@ -407,6 +422,7 @@ export async function executeAgentTool(
 
     return {
       result: summary,
+      cards: cardsFromAnalytics(summary),
       links: [{ label: "Full analytics", href: "/admin/analytics" }],
     };
   }

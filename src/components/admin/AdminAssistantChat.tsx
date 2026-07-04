@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AssistantMessageBody } from "@/components/admin/AssistantMessageBody";
+import type { AssistantCard } from "@/lib/agent/assistant-cards";
 import {
   speakText,
   stopSpeaking,
@@ -13,6 +15,7 @@ export interface AssistantMessage {
   role: "user" | "assistant";
   content: string;
   links?: { label: string; href: string }[];
+  cards?: AssistantCard[];
 }
 
 function newId() {
@@ -142,6 +145,7 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
           role: "assistant",
           content: data.reply,
           links: data.links,
+          cards: data.cards,
         };
         setMessages((prev) => [...prev, assistantMsg]);
         if (speakReplies) speakText(data.reply);
@@ -265,13 +269,17 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
             >
               {msg.role === "assistant" && <AssistantAvatar />}
               <div
-                className={`group max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ${
+                className={`group max-w-[92%] rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed shadow-sm ${
                   msg.role === "user"
                     ? "bg-neon text-ink"
                     : "border border-dark-border bg-dark-elevated text-white"
                 }`}
               >
-                <p className="whitespace-pre-wrap">{msg.content}</p>
+                {msg.role === "user" ? (
+                  <p className="whitespace-pre-wrap text-[13px]">{msg.content}</p>
+                ) : (
+                  <AssistantMessageBody content={msg.content} cards={msg.cards} />
+                )}
                 {msg.links && msg.links.length > 0 && (
                   <div className="mt-2.5 flex flex-col gap-1.5 border-t border-dark-border/50 pt-2.5">
                     {msg.links.map((link) => (

@@ -179,7 +179,10 @@ export interface ChatLink {
   href: string;
 }
 
+export type { AssistantCard } from "./assistant-cards";
+
 export interface AgentChatResult {
   reply: string;
   links?: ChatLink[];
+  cards?: import("./assistant-cards").AssistantCard[];
 }
