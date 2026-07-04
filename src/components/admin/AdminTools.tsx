@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { useToast } from "@/components/admin/Toast";
 import { SessionUser } from "@/lib/auth";
@@ -14,7 +15,7 @@ const statusColors: Record<string, string> = {
   PENDING: "text-yellow-400",
   IN_PROGRESS: "text-blue-400",
   APPLIED: "text-purple-400",
-  ACTIVE: "text-neon",
+  ACTIVE: "text-emerald-400",
   REJECTED: "text-red-400",
   PAUSED: "text-muted",
   NOT_AVAILABLE: "text-orange-400",
@@ -199,23 +200,18 @@ export function AdminTools({ user }: { user: SessionUser }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Tools</h1>
-          <p className="text-muted">
-            {total} tool{total === 1 ? "" : "s"}
-            {total !== tools.length ? ` · showing ${tools.length} on this page` : ""}
-          </p>
-        </div>
-        <Link
-          href="/admin/tools/new"
-          className="inline-flex rounded-xl bg-neon px-4 py-2 text-sm font-semibold text-ink hover:bg-neon-dim"
-        >
-          + Add tool
-        </Link>
-      </div>
+      <AdminPageHeader
+        hideTitle
+        title="Tools"
+        description={`${total} tool${total === 1 ? "" : "s"}${total !== tools.length ? ` · showing ${tools.length} on this page` : ""}`}
+        action={
+          <Link href="/admin/tools/new" className="admin-btn-primary">
+            + Add tool
+          </Link>
+        }
+      />
 
-      <div className="grid gap-3 rounded-2xl border border-dark-border bg-dark-elevated p-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 rounded-xl border border-dark-border bg-dark-elevated p-4 sm:grid-cols-2 lg:grid-cols-5">
         <input
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AFFILIATE_STATUSES } from "@/types/affiliate";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { SessionUser } from "@/lib/auth";
 
@@ -40,7 +41,7 @@ const statusColors: Record<string, string> = {
   PENDING: "text-yellow-400",
   IN_PROGRESS: "text-blue-400",
   APPLIED: "text-purple-400",
-  ACTIVE: "text-neon",
+  ACTIVE: "text-emerald-400",
   REJECTED: "text-red-400",
   PAUSED: "text-muted",
   NOT_AVAILABLE: "text-orange-400",
@@ -93,31 +94,32 @@ export function AdminDashboard({ user }: { user: SessionUser }) {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold">Welcome back, {data.userName ?? user.name}</h1>
-        <p className="text-muted">
-          {data.myOverdue > 0
+      <AdminPageHeader
+        hideTitle
+        title="Dashboard"
+        description={
+          data.myOverdue > 0
             ? `${data.myOverdue} overdue follow-up${data.myOverdue === 1 ? "" : "s"} need attention`
-            : "Overview of clicks and affiliate pipeline"}
-        </p>
-      </div>
+            : `Welcome back, ${data.userName ?? user.name}`
+        }
+      />
 
       <div className="flex flex-wrap gap-2">
-        <Link href="/admin/affiliates?action=create" className="rounded-xl bg-neon px-4 py-2 text-sm font-semibold text-ink">
+        <Link href="/admin/affiliates?action=create" className="admin-btn-primary">
           + Add program
         </Link>
-        <Link href="/admin/affiliates?status=PENDING" className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted hover:text-white">
+        <Link href="/admin/affiliates?status=PENDING" className="admin-btn-secondary">
           Review pending
         </Link>
-        <Link href="/admin/tools?affiliateFilter=missing" className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted hover:text-white">
+        <Link href="/admin/tools?affiliateFilter=missing" className="admin-btn-secondary">
           Tools missing affiliate ({data.toolsMissingAffiliate})
         </Link>
-        <Link href="/admin/affiliates?hasTool=false" className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted hover:text-white">
+        <Link href="/admin/affiliates?hasTool=false" className="admin-btn-secondary">
           CRM without tool ({data.programsNoTool})
         </Link>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {[
           { label: "Clicks today", value: data.todayClicks, href: "/admin/analytics?range=7d" },
           { label: "Clicks this week", value: data.weekClicks, href: "/admin/analytics?range=7d" },
@@ -127,49 +129,54 @@ export function AdminDashboard({ user }: { user: SessionUser }) {
           <Link
             key={stat.label}
             href={stat.href}
-            className="rounded-2xl border border-dark-border bg-dark-elevated p-5 transition hover:border-neon/30"
+            className="admin-card admin-card-pad transition hover:border-border-hover"
           >
-            <p className="text-sm text-muted">{stat.label}</p>
-            <p className="mt-1 text-3xl font-bold text-neon">{stat.value}</p>
+            <p className="admin-stat-label">{stat.label}</p>
+            <p className="admin-stat-value">{stat.value}</p>
           </Link>
         ))}
       </div>
 
-      <div className="rounded-2xl border border-dark-border bg-dark-elevated p-6">
-        <h2 className="mb-4 font-semibold">My work</h2>
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Link href="/admin/affiliates?mine=true" className="rounded-xl border border-dark-border p-4 hover:border-neon/30">
-            <p className="text-sm text-muted">Assigned to me</p>
-            <p className="text-2xl font-bold text-neon">{data.myAssigned}</p>
+      <div className="admin-card admin-card-pad">
+        <h2 className="admin-section-title mb-4">My work</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Link
+            href="/admin/affiliates?mine=true"
+            className="rounded-lg border border-dark-border p-4 transition hover:border-border-hover"
+          >
+            <p className="admin-stat-label">Assigned to me</p>
+            <p className="admin-stat-value">{data.myAssigned}</p>
           </Link>
-          <div className="rounded-xl border border-dark-border p-4">
-            <Link href="/admin/affiliates?mine=true&followups=due" className="block hover:opacity-90">
-              <p className="text-sm text-muted">My overdue follow-ups</p>
-              <p className="text-2xl font-bold text-red-400">{data.myOverdue}</p>
+          <div className="rounded-lg border border-dark-border p-4">
+            <Link href="/admin/affiliates?mine=true&followups=due" className="block">
+              <p className="admin-stat-label">My overdue follow-ups</p>
+              <p className="admin-stat-value text-red-400">{data.myOverdue}</p>
             </Link>
             {data.myOverdue > 0 && (
-              // API download — not a Next.js page route
               // eslint-disable-next-line @next/next/no-html-link-for-pages
               <a
                 href="/api/admin/affiliates/export?mine=true&followups=due"
-                className="mt-2 inline-block text-xs text-neon hover:underline"
+                className="admin-link-accent mt-2 inline-block"
               >
                 Export CSV
               </a>
             )}
           </div>
-          <Link href="/admin/affiliates?status=IN_PROGRESS&mine=true" className="rounded-xl border border-dark-border p-4 hover:border-neon/30">
-            <p className="text-sm text-muted">My in progress</p>
-            <p className="text-2xl font-bold text-blue-400">{data.myInProgress}</p>
+          <Link
+            href="/admin/affiliates?status=IN_PROGRESS&mine=true"
+            className="rounded-lg border border-dark-border p-4 transition hover:border-border-hover"
+          >
+            <p className="admin-stat-label">My in progress</p>
+            <p className="admin-stat-value text-sky-400">{data.myInProgress}</p>
           </Link>
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <div className="rounded-2xl border border-dark-border bg-dark-elevated p-6">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="admin-card admin-card-pad">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold">Last 7 days</h2>
-            <Link href="/admin/analytics" className="text-sm text-neon hover:underline">
+            <h2 className="admin-section-title">Last 7 days</h2>
+            <Link href="/admin/analytics" className="admin-link-accent">
               Full analytics
             </Link>
           </div>
@@ -182,8 +189,11 @@ export function AdminDashboard({ user }: { user: SessionUser }) {
                 const height = (count / maxDaily) * 100;
                 return (
                   <div key={day.date} className="flex flex-1 flex-col items-center gap-1" title={`${day.date}: ${count}`}>
-                    <div className="w-full rounded-t bg-neon/70" style={{ height: `${Math.max(height, 6)}%` }} />
-                    <span className="text-[9px] text-muted">{day.date.slice(8)}</span>
+                    <div
+                      className="w-full rounded-t bg-white/25"
+                      style={{ height: `${Math.max(height, 6)}%` }}
+                    />
+                    <span className="text-[9px] text-muted-dim">{day.date.slice(8)}</span>
                   </div>
                 );
               })}
@@ -192,19 +202,19 @@ export function AdminDashboard({ user }: { user: SessionUser }) {
           <ul className="mt-4 space-y-2">
             {data.topTools.slice(0, 5).map((tool) => (
               <li key={tool.slug} className="flex justify-between text-sm">
-                <Link href={`/admin/tools/${tool.toolId}`} className="hover:text-neon">
+                <Link href={`/admin/tools/${tool.toolId}`} className="admin-link truncate pr-4">
                   {tool.name}
                 </Link>
-                <span className="font-semibold text-neon">{tool.clicks}</span>
+                <span className="shrink-0 font-medium tabular-nums text-white">{tool.clicks}</span>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="rounded-2xl border border-dark-border bg-dark-elevated p-6">
+        <div className="admin-card admin-card-pad">
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold">Affiliate pipeline</h2>
-            <Link href="/admin/affiliates" className="text-sm text-neon hover:underline">
+            <h2 className="admin-section-title">Affiliate pipeline</h2>
+            <Link href="/admin/affiliates" className="admin-link-accent">
               Manage
             </Link>
           </div>
@@ -213,30 +223,32 @@ export function AdminDashboard({ user }: { user: SessionUser }) {
               const count = data.affiliateCounts[status] ?? 0;
               return (
                 <li key={status} className="flex justify-between">
-                  <Link href={statusLinks[status]} className="text-muted hover:text-neon">
+                  <Link href={statusLinks[status]} className="admin-link">
                     {status.replace(/_/g, " ")}
                   </Link>
-                  <span className={`font-semibold ${statusColors[status] ?? ""}`}>{count}</span>
+                  <span className={`font-medium tabular-nums ${statusColors[status] ?? ""}`}>
+                    {count}
+                  </span>
                 </li>
               );
             })}
             <li className="flex justify-between border-t border-dark-border pt-3">
-              <Link href="/admin/affiliates?unassigned=true" className="text-muted hover:text-neon">
+              <Link href="/admin/affiliates?unassigned=true" className="admin-link">
                 Unassigned
               </Link>
-              <span className="font-semibold text-yellow-400">{data.unassignedCount}</span>
+              <span className="font-medium tabular-nums text-amber-400">{data.unassignedCount}</span>
             </li>
             <li className="flex justify-between">
-              <Link href="/admin/affiliates?followups=due" className="text-muted hover:text-neon">
+              <Link href="/admin/affiliates?followups=due" className="admin-link">
                 Follow-ups due (7 days)
               </Link>
-              <span className="font-semibold text-red-400">{data.followUpsDue}</span>
+              <span className="font-medium tabular-nums text-red-400">{data.followUpsDue}</span>
             </li>
             <li className="flex justify-between border-t border-dark-border pt-3">
-              <Link href="/admin/tools?publishedFilter=published" className="text-muted hover:text-neon">
+              <Link href="/admin/tools?publishedFilter=published" className="admin-link">
                 Published tools
               </Link>
-              <span className="font-semibold">{data.toolCount}</span>
+              <span className="font-medium tabular-nums text-white">{data.toolCount}</span>
             </li>
           </ul>
         </div>
