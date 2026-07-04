@@ -73,7 +73,7 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
 
-  const { isSupported, isListening, liveTranscript, speechError, startListening, stopListening, consumeTranscript, clearSpeechError } =
+  const { isSupported, isListening, isRequestingMic, liveTranscript, speechError, startListening, stopListening, consumeTranscript, clearSpeechError } =
     useSpeechRecognition();
 
   useEffect(() => {
@@ -166,8 +166,9 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
     [loading, speakReplies]
   );
 
-  function toggleMic() {
+  async function toggleMic() {
     clearSpeechError();
+    setError("");
     if (isListening) {
       stopListening();
       const spoken = consumeTranscript();
@@ -178,10 +179,8 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
       return;
     }
 
-    const started = startListening();
-    if (!started) {
-      setError("Voice input is not supported in this browser. Try Chrome or Safari.");
-    }
+    const started = await startListening();
+    if (!started) return;
   }
 
   function clearChat() {
@@ -197,7 +196,8 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
   const composerValue = isListening
     ? [input, liveTranscript].filter(Boolean).join(input && liveTranscript ? " " : "")
     : input;
-  const canSend = !loading && ready !== false && !isListening && composerValue.trim().length > 0;
+  const canSend = !loading && ready !== false && !isListening && !isRequestingMic && composerValue.trim().length > 0;
+  const micBusy = isListening || isRequestingMic;
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -326,14 +326,14 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
               </div>
             </div>
           )}
-          {isListening && (
+          {micBusy && (
             <div className="flex justify-center">
               <span className="flex items-center gap-2 rounded-full border border-red-500/40 bg-red-500/10 px-3 py-1 text-xs text-red-300">
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
                 </span>
-                Listening… speak now
+                {isRequestingMic ? "Allow microphone when prompted…" : "Listening… tap mic when done"}
               </span>
             </div>
           )}
@@ -348,19 +348,23 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
         <div className="flex items-center gap-1.5 rounded-2xl border border-dark-border bg-dark p-1.5 shadow-inner focus-within:border-neon/40 focus-within:ring-1 focus-within:ring-neon/20">
           <button
             type="button"
-            onClick={toggleMic}
-            disabled={loading || ready === false || !isSupported}
+            onClick={() => void toggleMic()}
+            disabled={loading || ready === false || !isSupported || isRequestingMic}
             className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition ${
               isListening
                 ? "bg-red-500/20 text-red-400 animate-pulse"
-                : "text-muted hover:bg-dark-elevated hover:text-neon"
+                : isRequestingMic
+                  ? "bg-amber-500/15 text-amber-300"
+                  : "text-muted hover:bg-dark-elevated hover:text-neon"
             } disabled:opacity-40`}
             title={
               !isSupported
                 ? "Voice not supported in this browser"
-                : isListening
-                  ? "Stop listening"
-                  : "Talk — tap to speak"
+                : isRequestingMic
+                  ? "Waiting for microphone permission…"
+                  : isListening
+                    ? "Stop listening"
+                    : "Talk — tap to speak"
             }
             aria-label={isListening ? "Stop listening" : "Start voice input"}
           >
@@ -385,13 +389,17 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
               }
             }}
             rows={1}
-            readOnly={isListening}
+            readOnly={micBusy}
             disabled={loading || ready === false}
             placeholder={
-              isListening ? "Listening… tap mic when done, then Send" : "Message TOOLQZ assistant…"
+              isRequestingMic
+                ? "Allow microphone access in the browser prompt…"
+                : isListening
+                  ? "Listening… tap mic when done, then Send"
+                  : "Message TOOLQZ assistant…"
             }
             className={`max-h-28 min-h-[2.5rem] flex-1 resize-none border-0 bg-transparent px-1 py-2.5 text-sm leading-5 text-white placeholder:text-muted focus:outline-none focus:ring-0 disabled:opacity-50 ${
-              isListening ? "cursor-default" : ""
+              micBusy ? "cursor-default" : ""
             }`}
           />
           <button
@@ -414,8 +422,16 @@ export function AdminAssistantChat({ variant = "page", className = "" }: Props) 
         </p>
       </form>
 
-      {error && !loading && (
-        <p className={`text-xs text-red-400 ${isWidget ? "px-3 pb-2" : "mt-1 px-1"}`}>{error}</p>
+      {(error || speechError) && !loading && (
+        <div className={`text-xs text-red-400 ${isWidget ? "px-3 pb-2" : "mt-1 px-1"}`}>
+          <p>{error || speechError}</p>
+          {(error || speechError)?.includes("blocked") || (error || speechError)?.includes("denied") ? (
+            <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
+              Chrome: address bar → Site settings → Microphone → Allow. Safari: Settings → Websites →
+              Microphone. Then reload this page.
+            </p>
+          ) : null}
+        </div>
       )}
     </div>
   );
