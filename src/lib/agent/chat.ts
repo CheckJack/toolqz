@@ -1,0 +1,76 @@
+import type { AgentChatResult, AgentToolName, ChatLink } from "./definitions";
+import { executeAgentTool } from "./run-tools";
+import {
+  buildFunctionResponseContent,
+  buildModelFunctionCallContent,
+  runGeminiChatLoop,
+  type ChatTurn,
+} from "./gemini-chat";
+
+const SYSTEM_INSTRUCTION = `You are TOOLQZ Admin Assistant — an expert helper for managing the TOOLQZ tool directory backend.
+
+You can:
+- create_tool — research a URL and create a new unpublished draft tool listing
+- update_tool — refresh an existing tool from its website (by slug or name)
+- list_tools — list or count tools (optional category, search, published filter)
+- create_category — add a new tool category (label required)
+- create_blog_draft — write an unpublished blog post from a topic
+
+Rules:
+- Be concise and helpful.
+- All creates are drafts — never claim something is published unless list_tools shows published:true.
+- For update_tool, identify the tool by slug or name from the user's message.
+- Never invent data not returned by tools.
+- For greetings or capability questions, answer directly without calling tools.`;
+
+const MAX_TOOL_ROUNDS = 3;
+
+export async function runAgentChat(
+  history: ChatTurn[],
+  userId: string
+): Promise<AgentChatResult> {
+  const extraContents: ReturnType<typeof buildFunctionResponseContent>[] = [];
+  const links: ChatLink[] = [];
+
+  let result = await runGeminiChatLoop(SYSTEM_INSTRUCTION, history, extraContents);
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS && result.functionCalls.length > 0; round++) {
+    const calls = result.functionCalls;
+    result = { text: undefined, functionCalls: [] };
+
+    for (const call of calls) {
+      const toolName = call.name as AgentToolName;
+      extraContents.push(buildModelFunctionCallContent(toolName, call.args));
+
+      try {
+        const { result: toolResult, links: toolLinks } = await executeAgentTool(
+          toolName,
+          call.args,
+          userId
+        );
+        if (toolLinks) links.push(...toolLinks);
+        extraContents.push(
+          buildFunctionResponseContent(toolName, toolResult as Record<string, unknown>)
+        );
+      } catch (error) {
+        extraContents.push(
+          buildFunctionResponseContent(toolName, {
+            success: false,
+            error: error instanceof Error ? error.message : "Tool execution failed",
+          })
+        );
+      }
+    }
+
+    result = await runGeminiChatLoop(SYSTEM_INSTRUCTION, history, extraContents);
+  }
+
+  const reply =
+    result.text?.trim() ||
+    "Done. Let me know if you need anything else.";
+
+  return {
+    reply,
+    links: links.length > 0 ? links : undefined,
+  };
+}

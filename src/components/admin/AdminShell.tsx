@@ -7,13 +7,13 @@ import { SessionUser } from "@/lib/auth";
 import { ToastProvider, useToast } from "@/components/admin/Toast";
 import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
 import { AdminNotificationBell } from "@/components/admin/AdminNotificationBell";
-import { TeamChatWidget } from "@/components/admin/TeamChatWidget";
+import { AdminAssistantWidget } from "@/components/admin/AdminAssistantWidget";
 
 const navItems = [
   { href: "/admin", label: "Dashboard", badgeKey: null as null, adminOnly: false },
   { href: "/admin/analytics", label: "Analytics", badgeKey: null as null, adminOnly: false },
   { href: "/admin/hosting", label: "Hosting", badgeKey: null as null, adminOnly: true },
-  { href: "/admin/agent", label: "AI Agent", badgeKey: null as null, adminOnly: true },
+  { href: "/admin/agent", label: "AI Assistant", badgeKey: null as null, adminOnly: true },
   { href: "/admin/tools", label: "Tools", badgeKey: null as null, adminOnly: false },
   { href: "/admin/categories", label: "Categories", badgeKey: null as null, adminOnly: false },
   { href: "/admin/blog", label: "Blog", badgeKey: null as null, adminOnly: false },
@@ -243,7 +243,7 @@ function AdminShellInner({
           <div className="mx-auto max-w-6xl">{children}</div>
         </main>
       </div>
-      <TeamChatWidget user={user} />
+      <AdminAssistantWidget user={user} />
     </div>
   );
 }

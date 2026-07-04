@@ -1,0 +1,208 @@
+import { assertToolCategoryExists, categorySlugify, listToolCategoryFilters } from "@/lib/categories";
+import { logAudit } from "@/lib/audit-log";
+import { buildBlogData, serializeBlogPost } from "@/lib/blog-payload";
+import { prisma } from "@/lib/db";
+import { buildToolData, serializeTool } from "@/lib/tool-payload";
+import { researchBlogDraft } from "./blog-research";
+import { saveAgentToolDraft } from "./create-tool";
+import type { AgentChatResult, AgentToolName } from "./definitions";
+import { researchToolDraft } from "./tool-research";
+
+const toolInclude = {
+  _count: { select: { clicks: true } },
+  affiliate: { select: { id: true, status: true, companyName: true } },
+} as const;
+
+async function findTool(args: Record<string, unknown>) {
+  const id = typeof args.tool_id === "string" ? args.tool_id.trim() : "";
+  const slug = typeof args.tool_slug === "string" ? args.tool_slug.trim() : "";
+  const name = typeof args.tool_name === "string" ? args.tool_name.trim() : "";
+
+  if (id) return prisma.tool.findUnique({ where: { id }, include: toolInclude });
+  if (slug) return prisma.tool.findUnique({ where: { slug }, include: toolInclude });
+  if (name) {
+    return prisma.tool.findFirst({
+      where: { name: { contains: name } },
+      include: toolInclude,
+      orderBy: { name: "asc" },
+    });
+  }
+  return null;
+}
+
+export async function executeAgentTool(
+  name: AgentToolName,
+  args: Record<string, unknown>,
+  userId: string
+): Promise<{ result: unknown; links?: AgentChatResult["links"] }> {
+  if (name === "create_tool") {
+    const url = String(args.url ?? "").trim();
+    const toolName = typeof args.name === "string" ? args.name.trim() : undefined;
+    if (!url) throw new Error("create_tool requires a url");
+
+    const { draft } = await researchToolDraft({ name: toolName, url });
+    const tool = await saveAgentToolDraft(draft, userId);
+
+    return {
+      result: {
+        success: true,
+        toolId: tool.id,
+        name: tool.name,
+        slug: tool.slug,
+        editUrl: `/admin/tools/${tool.id}`,
+      },
+      links: [{ label: `Open draft: ${tool.name}`, href: `/admin/tools/${tool.id}` }],
+    };
+  }
+
+  if (name === "list_tools") {
+    const search = typeof args.search === "string" ? args.search.trim() : "";
+    const category = typeof args.category === "string" ? args.category.trim() : "";
+    const published = typeof args.published === "boolean" ? args.published : undefined;
+    const limit = Math.min(30, Math.max(1, Number(args.limit) || 15));
+
+    const where = {
+      ...(search
+        ? {
+            OR: [
+              { name: { contains: search } },
+              { slug: { contains: search } },
+              { description: { contains: search } },
+            ],
+          }
+        : {}),
+      ...(category ? { category } : {}),
+      ...(published === true ? { published: true } : published === false ? { published: false } : {}),
+    };
+
+    const [items, total, categories] = await Promise.all([
+      prisma.tool.findMany({
+        where,
+        select: { id: true, name: true, slug: true, category: true, published: true, featured: true },
+        orderBy: { name: "asc" },
+        take: limit,
+      }),
+      prisma.tool.count({ where }),
+      listToolCategoryFilters(),
+    ]);
+
+    const label = (slug: string) => categories.labels[slug] ?? slug;
+
+    return {
+      result: {
+        total,
+        showing: items.length,
+        tools: items.map((t) => ({
+          name: t.name,
+          slug: t.slug,
+          category: label(t.category),
+          published: t.published,
+          editUrl: `/admin/tools/${t.id}`,
+        })),
+      },
+    };
+  }
+
+  if (name === "create_category") {
+    const label = String(args.label ?? "").trim();
+    if (!label) throw new Error("create_category requires a label");
+
+    const slugInput = typeof args.slug === "string" ? args.slug.trim() : "";
+    const slug = slugInput ? categorySlugify(slugInput) : categorySlugify(label);
+    const description =
+      typeof args.description === "string" ? args.description.trim() || null : null;
+
+    const existing = await prisma.toolCategory.findUnique({ where: { slug } });
+    if (existing) {
+      throw new Error(`Category "${slug}" already exists`);
+    }
+
+    const category = await prisma.toolCategory.create({
+      data: { slug, label, description, published: true, sortOrder: 0 },
+    });
+
+    await logAudit("create", "category", `Agent created category "${category.label}"`, {
+      userId,
+      entityId: category.id,
+    });
+
+    return {
+      result: { success: true, slug: category.slug, label: category.label },
+      links: [{ label: `Category: ${category.label}`, href: "/admin/categories" }],
+    };
+  }
+
+  if (name === "create_blog_draft") {
+    const topic = String(args.topic ?? "").trim();
+    if (!topic) throw new Error("create_blog_draft requires a topic");
+
+    const draft = await researchBlogDraft(topic);
+    const conflict = await prisma.blogPost.findUnique({ where: { slug: draft.slug } });
+    if (conflict) {
+      draft.slug = `${draft.slug}-${Date.now().toString(36).slice(-4)}`;
+    }
+
+    const post = await prisma.blogPost.create({
+      data: buildBlogData({
+        title: draft.title,
+        slug: draft.slug,
+        excerpt: draft.excerpt,
+        content: draft.content,
+        coverImage: draft.coverImage,
+        published: false,
+        authorId: userId,
+      }),
+      include: { author: { select: { name: true } } },
+    });
+
+    await logAudit("create", "blog_post", `Agent created draft blog "${post.title}"`, {
+      userId,
+      entityId: post.id,
+    });
+
+    const serialized = serializeBlogPost(post);
+    return {
+      result: { success: true, title: serialized.title, slug: serialized.slug },
+      links: [{ label: `Open draft: ${serialized.title}`, href: `/admin/blog/${post.id}` }],
+    };
+  }
+
+  if (name === "update_tool") {
+    const tool = await findTool(args);
+    if (!tool) {
+      throw new Error("Tool not found — provide tool_slug, tool_name, or tool_id");
+    }
+
+    const url =
+      (typeof args.url === "string" ? args.url.trim() : "") || tool.url;
+    const { draft } = await researchToolDraft({ name: tool.name, url });
+    await assertToolCategoryExists(draft.category);
+
+    const updated = await prisma.tool.update({
+      where: { id: tool.id },
+      data: {
+        ...buildToolData({
+          ...draft,
+          slug: tool.slug,
+          published: tool.published,
+          featured: tool.featured,
+          affiliateUrl: tool.affiliateUrl,
+        }),
+      } as Parameters<typeof prisma.tool.update>[0]["data"],
+      include: toolInclude,
+    });
+
+    await logAudit("update", "tool", `Agent refreshed tool "${updated.name}" from website`, {
+      userId,
+      entityId: updated.id,
+    });
+
+    const serialized = serializeTool(updated);
+    return {
+      result: { success: true, name: serialized.name, slug: serialized.slug },
+      links: [{ label: `Open: ${serialized.name}`, href: `/admin/tools/${updated.id}` }],
+    };
+  }
+
+  throw new Error(`Unknown agent tool: ${name}`);
+}
