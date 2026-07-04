@@ -4,11 +4,11 @@ import { saveAgentToolDraft } from "@/lib/agent/create-tool";
 import { getGeminiConfig } from "@/lib/agent/gemini";
 import { parseCreateToolRequest } from "@/lib/agent/parse-request";
 import { researchToolDraft } from "@/lib/agent/tool-research";
-import { requireAdmin } from "@/lib/auth";
+import { requireSession } from "@/lib/auth";
 
 export async function GET() {
   try {
-    await requireAdmin();
+    await requireSession();
     const { configured, enabled } = getGeminiConfig();
     return NextResponse.json({ configured, enabled });
   } catch (error) {
@@ -18,7 +18,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await requireAdmin();
+    const session = await requireSession();
     const { configured, enabled } = getGeminiConfig();
 
     if (!enabled) {
@@ -56,12 +56,17 @@ export async function POST(request: NextRequest) {
     const { draft } = await researchToolDraft({ name, url });
     const tool = await saveAgentToolDraft(draft, session.id);
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: `Created draft tool "${tool.name}". Review and publish when ready.`,
       tool,
       editUrl: `/admin/tools/${tool.id}`,
+      deprecated: true,
+      hint: "Use POST /api/admin/agent/chat for the conversational assistant.",
     });
+    response.headers.set("Deprecation", "true");
+    response.headers.set("Link", '</api/admin/agent/chat>; rel="successor-version"');
+    return response;
   } catch (error) {
     if (error instanceof Error) {
       if (error.message === "Unauthorized" || error.message === "Forbidden") {

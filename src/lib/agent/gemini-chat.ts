@@ -53,7 +53,8 @@ async function generateOnce(
   apiKey: string,
   model: string,
   systemInstruction: string,
-  contents: GeminiContent[]
+  contents: GeminiContent[],
+  functionDeclarations: readonly { name: string; description?: string; parameters?: unknown }[]
 ): Promise<GenerateResult> {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
@@ -66,7 +67,7 @@ async function generateOnce(
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: systemInstruction }] },
         contents,
-        tools: [{ functionDeclarations: AGENT_FUNCTION_DECLARATIONS }],
+        tools: [{ functionDeclarations }],
         toolConfig: { functionCallingConfig: { mode: "AUTO" } },
         generationConfig: { temperature: 0.4 },
       }),
@@ -107,10 +108,134 @@ async function generateOnce(
   return { text: text.trim() || undefined, functionCalls };
 }
 
+async function streamGenerateOnce(
+  apiKey: string,
+  model: string,
+  systemInstruction: string,
+  contents: GeminiContent[],
+  functionDeclarations: readonly { name: string; description?: string; parameters?: unknown }[],
+  onDelta: (delta: string) => void,
+  signal?: AbortSignal
+): Promise<GenerateResult> {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-goog-api-key": apiKey,
+      },
+      signal,
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemInstruction }] },
+        contents,
+        tools: [{ functionDeclarations }],
+        toolConfig: { functionCallingConfig: { mode: "AUTO" } },
+        generationConfig: { temperature: 0.4 },
+      }),
+    }
+  );
+
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    const err = new Error(formatGeminiError(res.status, data.error?.message ?? "")) as Error & {
+      status?: number;
+      model?: string;
+    };
+    err.status = res.status;
+    err.model = model;
+    throw err;
+  }
+
+  const functionCalls: GenerateResult["functionCalls"] = [];
+  let text = "";
+  const reader = res.body?.getReader();
+  if (!reader) throw new Error("Gemini stream unavailable");
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      if (!line.startsWith("data: ")) continue;
+      const payload = line.slice(6).trim();
+      if (!payload || payload === "[DONE]") continue;
+
+      try {
+        const chunk = JSON.parse(payload) as {
+          candidates?: { content?: { parts?: GeminiPart[] } }[];
+        };
+        for (const part of chunk.candidates?.[0]?.content?.parts ?? []) {
+          if ("text" in part && part.text) {
+            text += part.text;
+            onDelta(part.text);
+          }
+          if ("functionCall" in part && part.functionCall) {
+            functionCalls.push({
+              name: part.functionCall.name,
+              args: (part.functionCall.args ?? {}) as Record<string, unknown>,
+            });
+          }
+        }
+      } catch {
+        /* skip malformed chunk */
+      }
+    }
+  }
+
+  return { text: text.trim() || undefined, functionCalls };
+}
+
+export async function runGeminiChatStream(
+  systemInstruction: string,
+  history: ChatTurn[],
+  contentsExtra: GeminiContent[] = [],
+  functionDeclarations: readonly { name: string; description?: string; parameters?: unknown }[] = AGENT_FUNCTION_DECLARATIONS,
+  onDelta: (delta: string) => void,
+  signal?: AbortSignal
+): Promise<GenerateResult> {
+  const { apiKey } = getGeminiConfig();
+  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
+
+  const contents: GeminiContent[] = [...toGeminiContents(history), ...contentsExtra];
+  const failures: (Error & { status?: number; model?: string })[] = [];
+
+  for (const model of modelCandidates()) {
+    try {
+      return await streamGenerateOnce(
+        apiKey,
+        model,
+        systemInstruction,
+        contents,
+        functionDeclarations,
+        onDelta,
+        signal
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") throw error;
+      const err = error as Error & { status?: number; model?: string };
+      failures.push(err);
+      if (err.status === 404 || err.status === 429) continue;
+      throw err;
+    }
+  }
+
+  throw failures[failures.length - 1] ?? new Error("Gemini API request failed");
+}
+
 export async function runGeminiChatLoop(
   systemInstruction: string,
   history: ChatTurn[],
-  contentsExtra: GeminiContent[] = []
+  contentsExtra: GeminiContent[] = [],
+  functionDeclarations: readonly { name: string; description?: string; parameters?: unknown }[] = AGENT_FUNCTION_DECLARATIONS
 ): Promise<GenerateResult> {
   const { apiKey } = getGeminiConfig();
   if (!apiKey) {
@@ -122,7 +247,7 @@ export async function runGeminiChatLoop(
 
   for (const model of modelCandidates()) {
     try {
-      return await generateOnce(apiKey, model, systemInstruction, contents);
+      return await generateOnce(apiKey, model, systemInstruction, contents, functionDeclarations);
     } catch (error) {
       const err = error as Error & { status?: number; model?: string };
       failures.push(err);

@@ -14,8 +14,10 @@ import {
 import { getAgentAnalyticsSummary } from "./analytics-summary";
 import { researchBlogDraft } from "./blog-research";
 import { saveAgentToolDraft } from "./create-tool";
-import type { AgentChatResult, AgentToolName } from "./definitions";
+import type { AgentChatResult, AgentExecutionContext, AgentToolName } from "./definitions";
 import { researchToolDraft } from "./tool-research";
+import { assertAgentToolAccess } from "./tool-access";
+import { executeExtendedAgentTool, EXTENDED_AGENT_TOOLS } from "./run-tools-extended";
 
 const toolInclude = {
   _count: { select: { clicks: true } },
@@ -87,8 +89,16 @@ function needsConfirmation(
 export async function executeAgentTool(
   name: AgentToolName,
   args: Record<string, unknown>,
-  userId: string
+  ctx: AgentExecutionContext
 ): Promise<{ result: unknown; links?: AgentChatResult["links"]; cards?: AssistantCard[] }> {
+  assertAgentToolAccess(name, ctx.role);
+
+  if (EXTENDED_AGENT_TOOLS.has(name)) {
+    return executeExtendedAgentTool(name, args, ctx);
+  }
+
+  const userId = ctx.userId;
+
   if (name === "create_tool") {
     const url = String(args.url ?? "").trim();
     const toolName = typeof args.name === "string" ? args.name.trim() : undefined;

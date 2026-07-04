@@ -33,6 +33,9 @@ yarn-error.log*
 .env.*
 !.env.example
 
+# cursor MCP (contains API token when generated)
+.cursor/mcp.json
+
 # database
 prisma/dev.db
 prisma/dev.db-journal

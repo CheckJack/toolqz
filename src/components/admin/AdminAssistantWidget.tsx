@@ -11,13 +11,18 @@ export function AdminAssistantWidget({ user }: { user: SessionUser }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
-  if (user.role !== "ADMIN") return null;
+  if (user.role !== "ADMIN" && user.role !== "MEMBER") return null;
   if (pathname === "/admin/agent") return null;
 
   return (
     <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
-      {open && (
-        <div className="flex h-[min(540px,calc(100vh-6rem))] w-[min(400px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-dark-border bg-dark-elevated shadow-2xl shadow-black/40">
+      {/* Keep chat mounted when closed so history and drafts are preserved */}
+      <div
+        className={`flex flex-col overflow-hidden rounded-xl border border-dark-border bg-dark-elevated shadow-2xl shadow-black/40 max-sm:fixed max-sm:inset-x-2 max-sm:bottom-[4.5rem] max-sm:top-16 max-sm:h-auto max-sm:max-h-none max-sm:w-auto sm:h-[min(540px,calc(100vh-6rem))] sm:w-[min(400px,calc(100vw-2rem))] ${
+          open ? "" : "pointer-events-none invisible absolute bottom-0 right-0 sm:h-[min(540px,calc(100vh-6rem))] sm:w-[min(400px,calc(100vw-2rem))]"
+        }`}
+        aria-hidden={!open}
+      >
           <div className="flex items-center justify-between border-b border-dark-border px-4 py-3">
             <div className="flex items-center gap-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-dark-border bg-dark text-muted">
@@ -48,9 +53,13 @@ export function AdminAssistantWidget({ user }: { user: SessionUser }) {
               </button>
             </div>
           </div>
-          <AdminAssistantChat variant="widget" className="min-h-0 flex-1" />
+          <AdminAssistantChat
+            variant="widget"
+            className="min-h-0 flex-1"
+            persistKey="widget"
+            onRequestClose={() => setOpen(false)}
+          />
         </div>
-      )}
 
       <button
         type="button"

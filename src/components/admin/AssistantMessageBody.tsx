@@ -211,7 +211,13 @@ function AffiliateListCard({ card }: { card: Extract<AssistantCard, { type: "aff
   );
 }
 
-function AlertCard({ card }: { card: Extract<AssistantCard, { type: "alert" }> }) {
+function AlertCard({
+  card,
+  onPrompt,
+}: {
+  card: Extract<AssistantCard, { type: "alert" }>;
+  onPrompt?: (text: string) => void;
+}) {
   const styles = {
     warning: "border-amber-500/30 bg-amber-500/5 text-amber-100",
     success: "border-emerald-500/30 bg-emerald-500/5 text-emerald-100",
@@ -222,11 +228,37 @@ function AlertCard({ card }: { card: Extract<AssistantCard, { type: "alert" }> }
     <div className={`rounded-xl border px-3 py-2.5 ${styles}`}>
       {card.title && <p className="text-[13px] font-semibold text-white">{card.title}</p>}
       <p className={`text-[12px] leading-relaxed ${card.title ? "mt-1" : ""}`}>{card.message}</p>
+      {card.confirmPrompt && onPrompt && (
+        <div className="mt-2.5 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => onPrompt(card.confirmPrompt!.yes)}
+            className="rounded-lg bg-neon px-3 py-1.5 text-[12px] font-medium text-ink hover:bg-neon-dim"
+          >
+            Confirm
+          </button>
+          {card.confirmPrompt.no && (
+            <button
+              type="button"
+              onClick={() => onPrompt(card.confirmPrompt!.no!)}
+              className="rounded-lg border border-dark-border px-3 py-1.5 text-[12px] text-muted hover:text-white"
+            >
+              Cancel
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
 
-function AssistantCardView({ card }: { card: AssistantCard }) {
+function AssistantCardView({
+  card,
+  onPrompt,
+}: {
+  card: AssistantCard;
+  onPrompt?: (text: string) => void;
+}) {
   switch (card.type) {
     case "stats":
       return <StatCard card={card} />;
@@ -237,7 +269,7 @@ function AssistantCardView({ card }: { card: AssistantCard }) {
     case "affiliate_list":
       return <AffiliateListCard card={card} />;
     case "alert":
-      return <AlertCard card={card} />;
+      return <AlertCard card={card} onPrompt={onPrompt} />;
     default:
       return null;
   }
@@ -246,9 +278,11 @@ function AssistantCardView({ card }: { card: AssistantCard }) {
 export function AssistantMessageBody({
   content,
   cards,
+  onPrompt,
 }: {
   content: string;
   cards?: AssistantCard[];
+  onPrompt?: (text: string) => void;
 }) {
   const hasCards = cards && cards.length > 0;
 
@@ -262,7 +296,7 @@ export function AssistantMessageBody({
       {hasCards && (
         <div className="space-y-2">
           {cards.map((card, i) => (
-            <AssistantCardView key={`${card.type}-${i}`} card={card} />
+            <AssistantCardView key={`${card.type}-${i}`} card={card} onPrompt={onPrompt} />
           ))}
         </div>
       )}

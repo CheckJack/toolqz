@@ -45,6 +45,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { href: "/admin/tools", label: "Tools", icon: Wrench },
       { href: "/admin/categories", label: "Categories", icon: FolderTree },
       { href: "/admin/blog", label: "Blog", icon: FileText },
+      { href: "/admin/agent", label: "Assistant", icon: MessageSquare },
     ],
   },
   {

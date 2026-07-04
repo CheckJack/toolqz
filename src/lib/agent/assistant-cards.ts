@@ -29,7 +29,7 @@ export type AssistantCard =
   | { type: "ranked_list"; title: string; items: RankedItem[] }
   | { type: "tool_list"; title?: string; total?: number; tools: ToolListItem[] }
   | { type: "affiliate_list"; title?: string; total?: number; affiliates: AffiliateListItem[] }
-  | { type: "alert"; variant: "warning" | "success" | "info"; title?: string; message: string };
+  | { type: "alert"; variant: "warning" | "success" | "info"; title?: string; message: string; confirmPrompt?: { yes: string; no?: string } };
 
 export function cardsFromAnalytics(summary: {
   range: string;
@@ -154,7 +154,11 @@ export function cardFromConfirmation(preview: Record<string, unknown>): Assistan
     preview.tool && typeof preview.tool === "object"
       ? (preview.tool as { name?: string })
       : undefined;
-  const toolName = tool?.name ?? "this tool";
+  const post =
+    preview.post && typeof preview.post === "object"
+      ? (preview.post as { title?: string })
+      : undefined;
+  const toolName = tool?.name ?? post?.title ?? "this item";
   const title =
     action === "delete"
       ? `Delete ${toolName}?`
@@ -162,14 +166,229 @@ export function cardFromConfirmation(preview: Record<string, unknown>): Assistan
         ? `Publish ${toolName}?`
         : action === "unpublish"
           ? `Unpublish ${toolName}?`
-          : "Confirm action";
+          : action === "feature"
+            ? `Feature ${toolName}?`
+            : action === "unfeature"
+              ? `Unfeature ${toolName}?`
+              : action === "publish_blog"
+                ? `Publish ${toolName}?`
+                : action === "unpublish_blog"
+                  ? `Unpublish ${toolName}?`
+                  : "Confirm action";
 
   return {
     type: "alert",
     variant: "warning",
     title,
     message,
+    confirmPrompt: {
+      yes: buildConfirmYesMessage(action, toolName),
+      no: "Cancel — do not proceed",
+    },
   };
+}
+
+function buildConfirmYesMessage(action: string, name: string): string {
+  switch (action) {
+    case "delete":
+      return `Yes, confirm delete "${name}"`;
+    case "publish":
+      return `Yes, confirm publish "${name}"`;
+    case "unpublish":
+      return `Yes, confirm unpublish "${name}"`;
+    case "feature":
+      return `Yes, confirm feature "${name}"`;
+    case "unfeature":
+      return `Yes, confirm unfeature "${name}"`;
+    case "publish_blog":
+      return `Yes, confirm publish blog post "${name}"`;
+    case "unpublish_blog":
+      return `Yes, confirm unpublish blog post "${name}"`;
+    default:
+      return "Yes, confirm";
+  }
+}
+
+export function cardsFromMyWork(summary: {
+  myAssigned: number;
+  myOverdue: number;
+  myInProgress: number;
+  draftTools: number;
+  toolsMissingAffiliate: number;
+  programsNoTool: number;
+  followUpsDue: number;
+  overduePrograms: { companyName: string; status: string; due: string; editUrl: string }[];
+}): AssistantCard[] {
+  const cards: AssistantCard[] = [
+    {
+      type: "stats",
+      title: "Your queue",
+      items: [
+        { label: "Assigned to you", value: summary.myAssigned },
+        { label: "Overdue follow-ups", value: summary.myOverdue },
+        { label: "In progress", value: summary.myInProgress },
+        { label: "Draft tools (all)", value: summary.draftTools },
+      ],
+    },
+    {
+      type: "stats",
+      title: "Catalog",
+      items: [
+        { label: "Published, no affiliate URL", value: summary.toolsMissingAffiliate },
+        { label: "Affiliates without tool", value: summary.programsNoTool },
+        { label: "Follow-ups due (7d)", value: summary.followUpsDue },
+      ],
+    },
+  ];
+
+  if (summary.overduePrograms.length > 0) {
+    cards.push({
+      type: "ranked_list",
+      title: "Overdue follow-ups",
+      items: summary.overduePrograms.map((p) => ({
+        label: p.companyName,
+        value: p.due,
+        hint: p.status,
+      })),
+    });
+  }
+
+  return cards;
+}
+
+export function cardsFromToolIssues(summary: {
+  draftCount: number;
+  publishedNoAffiliate: { total: number; items: { name: string; editUrl: string }[] };
+  zeroClickPublished: { total: number; items: { name: string; editUrl: string }[] };
+  activeCrmNoUrl: { total: number; items: { name: string; editUrl: string }[] };
+}): AssistantCard[] {
+  const cards: AssistantCard[] = [
+    {
+      type: "stats",
+      title: "Tool issues",
+      items: [
+        { label: "Draft tools", value: summary.draftCount },
+        { label: "Published, no affiliate", value: summary.publishedNoAffiliate.total },
+        { label: "Zero-click published", value: summary.zeroClickPublished.total },
+        { label: "Active CRM, no URL on tool", value: summary.activeCrmNoUrl.total },
+      ],
+    },
+  ];
+
+  const addList = (title: string, items: { name: string; editUrl: string }[]) => {
+    if (items.length === 0) return;
+    cards.push({
+      type: "ranked_list",
+      title,
+      items: items.map((t) => ({ label: t.name, hint: "open in admin" })),
+    });
+  };
+
+  addList("Missing affiliate URL", summary.publishedNoAffiliate.items);
+  addList("Zero clicks", summary.zeroClickPublished.items);
+  addList("CRM active, no URL", summary.activeCrmNoUrl.items);
+
+  return cards;
+}
+
+export interface BlogListItem {
+  title: string;
+  slug: string;
+  published: boolean;
+  editUrl: string;
+}
+
+export function cardsFromBlogList(result: {
+  total: number;
+  showing: number;
+  posts: BlogListItem[];
+}): AssistantCard[] {
+  if (result.posts.length === 0) {
+    return [{ type: "alert", variant: "info", message: "No blog posts matched." }];
+  }
+
+  return [
+    {
+      type: "ranked_list",
+      title: `Blog posts (${result.showing} of ${result.total})`,
+      items: result.posts.map((p) => ({
+        label: p.title,
+        value: p.published ? "live" : "draft",
+        hint: p.slug,
+      })),
+    },
+  ];
+}
+
+export function cardsFromFinance(summary: {
+  allTime: { earnings: number; expenses: number; net: number };
+  last30Days: { earnings: number; expenses: number; net: number };
+}): AssistantCard[] {
+  const fmt = (n: number) => `€${n.toFixed(2)}`;
+  return [
+    {
+      type: "stats",
+      title: "All time",
+      items: [
+        { label: "Earnings", value: fmt(summary.allTime.earnings) },
+        { label: "Expenses", value: fmt(summary.allTime.expenses) },
+        { label: "Net", value: fmt(summary.allTime.net) },
+      ],
+    },
+    {
+      type: "stats",
+      title: "Last 30 days",
+      items: [
+        { label: "Earnings", value: fmt(summary.last30Days.earnings) },
+        { label: "Expenses", value: fmt(summary.last30Days.expenses) },
+        { label: "Net", value: fmt(summary.last30Days.net) },
+      ],
+    },
+  ];
+}
+
+export function cardsFromAuditLog(result: {
+  total: number;
+  showing: number;
+  entries: { action: string; entity: string; detail: string; user: string; at: string }[];
+}): AssistantCard[] {
+  if (result.entries.length === 0) {
+    return [{ type: "alert", variant: "info", message: "No audit log entries matched." }];
+  }
+
+  return [
+    {
+      type: "ranked_list",
+      title: `Audit log (${result.showing} of ${result.total})`,
+      items: result.entries.map((e) => ({
+        label: e.detail || `${e.action} ${e.entity}`,
+        value: e.at,
+        hint: e.user,
+      })),
+    },
+  ];
+}
+
+export function cardsFromSubscribers(result: {
+  total: number;
+  showing: number;
+  subscribers: { email: string; name: string; subscribedAt: string }[];
+}): AssistantCard[] {
+  if (result.subscribers.length === 0) {
+    return [{ type: "alert", variant: "info", message: "No subscribers matched." }];
+  }
+
+  return [
+    {
+      type: "ranked_list",
+      title: `Subscribers (${result.showing} of ${result.total})`,
+      items: result.subscribers.map((s) => ({
+        label: s.email,
+        value: s.subscribedAt,
+        hint: s.name,
+      })),
+    },
+  ];
 }
 
 function formatReferrer(referrer: string): string {

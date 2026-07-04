@@ -1,4 +1,12 @@
 import { prisma } from "@/lib/db";
+import { sendTelegramAlert } from "@/lib/telegram";
+
+const TELEGRAM_NOTIFY_TYPES = new Set([
+  "follow_up_due",
+  "partner_inquiry",
+  "tool_published",
+  "affiliate_status",
+]);
 
 export async function createNotification(input: {
   userId: string;
@@ -8,7 +16,7 @@ export async function createNotification(input: {
   href?: string | null;
   entityId?: string | null;
 }) {
-  return prisma.adminNotification.create({
+  const notification = await prisma.adminNotification.create({
     data: {
       userId: input.userId,
       type: input.type,
@@ -18,6 +26,12 @@ export async function createNotification(input: {
       entityId: input.entityId ?? null,
     },
   });
+
+  if (TELEGRAM_NOTIFY_TYPES.has(input.type) || input.type.startsWith("agent_")) {
+    void sendTelegramAlert(input.title, input.body, input.href);
+  }
+
+  return notification;
 }
 
 export async function syncFollowUpNotificationsForUser(userId: string) {

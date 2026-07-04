@@ -26,6 +26,7 @@ model User {
   teamConversationReads TeamConversationRead[]
   financeEntries     FinanceEntry[]
   blogPosts          BlogPost[]
+  chatSessions       AdminChatSession[]
 }
 
 model Tool {
@@ -282,4 +283,28 @@ model BlogPost {
 
   @@index([published, publishedAt])
   @@index([createdAt])
+}
+
+model AdminChatSession {
+  id        String             @id @default(cuid())
+  userId    String
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+  messages  AdminChatMessage[]
+
+  @@index([userId, updatedAt])
+}
+
+model AdminChatMessage {
+  id        String           @id @default(cuid())
+  sessionId String
+  session   AdminChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String
+  content   String
+  metadata  String?
+  createdAt DateTime         @default(now())
+
+  @@index([sessionId, createdAt])
 }

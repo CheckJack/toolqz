@@ -13,7 +13,7 @@ export function AdminAgent() {
       />
 
       <div className="admin-card overflow-hidden">
-        <AdminAssistantChat variant="page" className="min-h-[min(70vh,640px)]" />
+        <AdminAssistantChat variant="page" className="min-h-[min(70vh,640px)]" persistKey="page" />
       </div>
 
       <div className="admin-card admin-card-pad text-sm text-muted">
