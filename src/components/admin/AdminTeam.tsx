@@ -3,7 +3,6 @@
 import Link from "next/link";
 import {
   KeyRound,
-  MoreVertical,
   Pencil,
   Search,
   Shield,
@@ -14,6 +13,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SessionUser } from "@/lib/auth";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminRowActionsMenu } from "@/components/admin/AdminRowActionsMenu";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { useToast } from "@/components/admin/Toast";
 
@@ -662,53 +662,15 @@ function TeamRowActions({
   onToggleRole: () => void;
   onRemove: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    function onPointerDown(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mousedown", onPointerDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mousedown", onPointerDown);
-    };
-  }, [open]);
-
   return (
-    <div ref={rootRef} className="relative inline-flex justify-end">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="admin-icon-btn h-8 w-8"
-        aria-label={`Actions for ${member.name}`}
-        aria-expanded={open}
-        aria-haspopup="menu"
-      >
-        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[11rem] py-1"
-        >
+    <AdminRowActionsMenu label={`Actions for ${member.name}`} minWidth="11rem">
+      {(close) => (
+        <>
           <button
             type="button"
             role="menuitem"
             onClick={() => {
-              setOpen(false);
+              close();
               onEdit();
             }}
             className="admin-menu-item w-full"
@@ -720,7 +682,7 @@ function TeamRowActions({
             type="button"
             role="menuitem"
             onClick={() => {
-              setOpen(false);
+              close();
               onResetPassword();
             }}
             className="admin-menu-item w-full"
@@ -732,7 +694,7 @@ function TeamRowActions({
             type="button"
             role="menuitem"
             onClick={() => {
-              setOpen(false);
+              close();
               onToggleRole();
             }}
             className="admin-menu-item w-full"
@@ -748,7 +710,7 @@ function TeamRowActions({
             type="button"
             role="menuitem"
             onClick={() => {
-              setOpen(false);
+              close();
               onRemove();
             }}
             className="admin-menu-item w-full text-red-400 hover:text-red-300"
@@ -756,8 +718,8 @@ function TeamRowActions({
             <Trash2 className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
             Remove
           </button>
-        </div>
+        </>
       )}
-    </div>
+    </AdminRowActionsMenu>
   );
 }

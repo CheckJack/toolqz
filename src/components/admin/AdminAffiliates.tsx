@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ExternalLink, LayoutGrid, MoreVertical, Pencil, Search } from "lucide-react";
+import { ExternalLink, LayoutGrid, Pencil, Search } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AdminAffiliateForm,
@@ -11,6 +11,7 @@ import {
   AffiliateFormData,
 } from "@/components/admin/AdminAffiliateForm";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminRowActionsMenu } from "@/components/admin/AdminRowActionsMenu";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { AdminAffiliateKanban } from "@/components/admin/AdminAffiliateKanban";
 import { useToast } from "@/components/admin/Toast";
@@ -1222,52 +1223,14 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
 }
 
 function AffiliateRowActions({ program }: { program: AffiliateProgram }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    function onPointerDown(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mousedown", onPointerDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mousedown", onPointerDown);
-    };
-  }, [open]);
-
   return (
-    <div ref={rootRef} className="relative inline-flex justify-end">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="admin-icon-btn h-8 w-8"
-        aria-label={`Actions for ${program.companyName}`}
-        aria-expanded={open}
-        aria-haspopup="menu"
-      >
-        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[10.5rem] py-1"
-        >
+    <AdminRowActionsMenu label={`Actions for ${program.companyName}`}>
+      {(close) => (
+        <>
           <Link
             href={`/admin/affiliates/${program.id}`}
             role="menuitem"
-            onClick={() => setOpen(false)}
+            onClick={close}
             className="admin-menu-item"
           >
             <Pencil className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
@@ -1277,7 +1240,7 @@ function AffiliateRowActions({ program }: { program: AffiliateProgram }) {
             <Link
               href={`/admin/tools/${program.tool.id}`}
               role="menuitem"
-              onClick={() => setOpen(false)}
+              onClick={close}
               className="admin-menu-item"
             >
               <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
@@ -1290,15 +1253,15 @@ function AffiliateRowActions({ program }: { program: AffiliateProgram }) {
               target="_blank"
               rel="noopener noreferrer"
               role="menuitem"
-              onClick={() => setOpen(false)}
+              onClick={close}
               className="admin-menu-item"
             >
               <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
               Affiliate dashboard
             </a>
           )}
-        </div>
+        </>
       )}
-    </div>
+    </AdminRowActionsMenu>
   );
 }

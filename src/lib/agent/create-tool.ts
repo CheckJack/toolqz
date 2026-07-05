@@ -20,9 +20,23 @@ export async function saveAgentToolDraft(
     throw new Error(`A tool with slug "${draft.slug}" already exists`);
   }
 
+  const urlNorm = draft.url.replace(/\/$/, "");
+  const existingUrl = await prisma.tool.findFirst({
+    where: {
+      OR: [{ url: draft.url }, { url: urlNorm }, { url: `${urlNorm}/` }],
+    },
+    select: { name: true, slug: true },
+  });
+  if (existingUrl) {
+    throw new Error(
+      `A tool already exists for this URL: "${existingUrl.name}" (${existingUrl.slug})`
+    );
+  }
+
   const body = {
     ...draft,
     affiliateUrl: null,
+    listingType: "EDITORIAL",
     published: false,
     featured: false,
   };

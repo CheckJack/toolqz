@@ -1,5 +1,6 @@
 import { queryDailyClicks } from "@/lib/analytics-queries";
 import { prisma } from "@/lib/db";
+import { partnerMissingAffiliateWhere } from "./catalog-filters";
 
 function getRangeStart(range: string): Date | null {
   const now = new Date();
@@ -78,17 +79,19 @@ export async function getAgentAnalyticsSummary(
     }),
     prisma.tool.count(),
     prisma.affiliateProgram.groupBy({ by: ["status"], _count: { id: true } }),
-    prisma.tool.count({ where: { published: true, affiliateUrl: null } }),
+    prisma.tool.count({ where: partnerMissingAffiliateWhere }),
     prisma.affiliateProgram.count({ where: { toolId: null } }),
   ]);
 
   const toolsWithClicks = allTools
     .map((t) => ({
+      id: t.id,
       name: t.name,
       slug: t.slug,
       clicks: t._count.clicks,
       hasAffiliateUrl: !!t.affiliateUrl,
       published: t.published,
+      editUrl: `/admin/tools/${t.id}`,
     }))
     .sort((a, b) => b.clicks - a.clicks);
 

@@ -6,13 +6,13 @@ import {
   ExternalLink,
   LayoutGrid,
   Link2,
-  MoreVertical,
   Pencil,
   Plus,
   Search,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminRowActionsMenu } from "@/components/admin/AdminRowActionsMenu";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { useToast } from "@/components/admin/Toast";
 import { AFFILIATE_CATEGORIES } from "@/constants/affiliate-categories";
@@ -94,53 +94,15 @@ function DirectoryRowActions({
   program: AffiliateProgram;
   onEdit: (program: AffiliateProgram) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    function onPointerDown(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mousedown", onPointerDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mousedown", onPointerDown);
-    };
-  }, [open]);
-
   return (
-    <div ref={rootRef} className="relative inline-flex justify-end">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="admin-icon-btn h-8 w-8"
-        aria-label={`Actions for ${program.companyName}`}
-        aria-expanded={open}
-        aria-haspopup="menu"
-      >
-        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[10.5rem] py-1"
-        >
+    <AdminRowActionsMenu label={`Actions for ${program.companyName}`}>
+      {(close) => (
+        <>
           <button
             type="button"
             role="menuitem"
             onClick={() => {
-              setOpen(false);
+              close();
               onEdit(program);
             }}
             className="admin-menu-item w-full"
@@ -151,7 +113,7 @@ function DirectoryRowActions({
           <Link
             href={`/admin/affiliates/${program.id}`}
             role="menuitem"
-            onClick={() => setOpen(false)}
+            onClick={close}
             className="admin-menu-item"
           >
             <LayoutGrid className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
@@ -161,7 +123,7 @@ function DirectoryRowActions({
             <Link
               href={`/admin/tools/${program.tool.id}`}
               role="menuitem"
-              onClick={() => setOpen(false)}
+              onClick={close}
               className="admin-menu-item"
             >
               <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
@@ -174,16 +136,16 @@ function DirectoryRowActions({
               target="_blank"
               rel="noopener noreferrer"
               role="menuitem"
-              onClick={() => setOpen(false)}
+              onClick={close}
               className="admin-menu-item"
             >
               <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
               Open dashboard
             </a>
           )}
-        </div>
+        </>
       )}
-    </div>
+    </AdminRowActionsMenu>
   );
 }
 

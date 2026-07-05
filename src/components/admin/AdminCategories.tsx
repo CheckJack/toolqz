@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { MoreVertical, Pencil, Search, Trash2, Wrench } from "lucide-react";
+import { Pencil, Search, Trash2, Wrench } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminRowActionsMenu } from "@/components/admin/AdminRowActionsMenu";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { useToast } from "@/components/admin/Toast";
 import { categorySlugify } from "@/lib/categories";
@@ -425,54 +426,16 @@ function CategoryRowActions({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    function onPointerDown(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mousedown", onPointerDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mousedown", onPointerDown);
-    };
-  }, [open]);
-
   return (
-    <div ref={rootRef} className="relative inline-flex justify-end">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="admin-icon-btn h-8 w-8"
-        aria-label={`Actions for ${category.label}`}
-        aria-expanded={open}
-        aria-haspopup="menu"
-      >
-        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[10.5rem] py-1"
-        >
+    <AdminRowActionsMenu label={`Actions for ${category.label}`}>
+      {(close) => (
+        <>
           {writable && (
             <button
               type="button"
               role="menuitem"
               onClick={() => {
-                setOpen(false);
+                close();
                 onEdit();
               }}
               className="admin-menu-item w-full text-left"
@@ -485,7 +448,7 @@ function CategoryRowActions({
             <Link
               href={`/admin/tools?category=${encodeURIComponent(category.slug)}`}
               role="menuitem"
-              onClick={() => setOpen(false)}
+              onClick={close}
               className="admin-menu-item"
             >
               <Wrench className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
@@ -497,7 +460,7 @@ function CategoryRowActions({
               type="button"
               role="menuitem"
               onClick={() => {
-                setOpen(false);
+                close();
                 onDelete();
               }}
               className="admin-menu-item w-full text-left text-red-400 hover:text-red-300"
@@ -506,8 +469,8 @@ function CategoryRowActions({
               Delete
             </button>
           )}
-        </div>
+        </>
       )}
-    </div>
+    </AdminRowActionsMenu>
   );
 }

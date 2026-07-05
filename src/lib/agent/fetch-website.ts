@@ -1,3 +1,5 @@
+import { assertPublicHttpUrl, assertResolvablePublicHost } from "./url-safety";
+
 function extractMeta(html: string, patterns: RegExp[]): string | undefined {
   for (const pattern of patterns) {
     const match = html.match(pattern);
@@ -38,12 +40,22 @@ export function extractPageContext(html: string, url: string): string {
     .join("\n");
 }
 
-export async function fetchWebsiteContext(url: string): Promise<string> {
+const EXTRA_PATHS = ["/pricing", "/plans", "/features", "/product"];
+
+function joinOrigin(url: string): string {
+  const parsed = assertPublicHttpUrl(url);
+  return parsed.origin;
+}
+
+async function fetchHtml(url: string): Promise<string | null> {
+  const parsed = assertPublicHttpUrl(url);
+  await assertResolvablePublicHost(parsed);
+
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
+  const timeout = setTimeout(() => controller.abort(), 15_000);
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(parsed.toString(), {
       signal: controller.signal,
       headers: {
         "User-Agent": "TOOLQZ-Agent/1.0 (+https://toolqz.com)",
@@ -52,13 +64,32 @@ export async function fetchWebsiteContext(url: string): Promise<string> {
       redirect: "follow",
     });
 
-    if (!res.ok) {
-      throw new Error(`Website returned HTTP ${res.status}`);
-    }
-
-    const html = await res.text();
-    return extractPageContext(html, url);
+    if (!res.ok) return null;
+    return await res.text();
+  } catch {
+    return null;
   } finally {
     clearTimeout(timeout);
   }
+}
+
+export async function fetchWebsiteContext(url: string): Promise<string> {
+  const origin = joinOrigin(url);
+  const mainHtml = await fetchHtml(url);
+  if (!mainHtml) {
+    throw new Error(`Website returned an error or could not be fetched: ${url}`);
+  }
+
+  const sections: string[] = [extractPageContext(mainHtml, url)];
+
+  for (const path of EXTRA_PATHS) {
+    const extraUrl = `${origin}${path}`;
+    if (extraUrl === url || extraUrl === `${url}/`) continue;
+    const html = await fetchHtml(extraUrl);
+    if (html && html.length > 500) {
+      sections.push(`\n--- ${path} ---\n${extractPageContext(html, extraUrl)}`);
+    }
+  }
+
+  return sections.join("\n").slice(0, 28_000);
 }

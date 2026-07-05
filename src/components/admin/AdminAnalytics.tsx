@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ExternalLink, MoreVertical, Pencil, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ExternalLink, Pencil, Search } from "lucide-react";
+import { AdminRowActionsMenu } from "@/components/admin/AdminRowActionsMenu";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { AdminChartCard } from "@/components/admin/charts/AdminChartCard";
 import { DailyAreaChart } from "@/components/admin/charts/DailyAreaChart";
@@ -455,52 +456,14 @@ export function AdminAnalytics() {
 }
 
 function AnalyticsToolRowActions({ tool }: { tool: ToolRow }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    function onPointerDown(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mousedown", onPointerDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mousedown", onPointerDown);
-    };
-  }, [open]);
-
   return (
-    <div ref={rootRef} className="relative inline-flex justify-end">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="admin-icon-btn h-8 w-8"
-        aria-label={`Actions for ${tool.name}`}
-        aria-expanded={open}
-        aria-haspopup="menu"
-      >
-        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[10.5rem] py-1"
-        >
+    <AdminRowActionsMenu label={`Actions for ${tool.name}`}>
+      {(close) => (
+        <>
           <Link
             href={`/admin/tools/${tool.toolId}`}
             role="menuitem"
-            onClick={() => setOpen(false)}
+            onClick={close}
             className="admin-menu-item"
           >
             <Pencil className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
@@ -512,15 +475,15 @@ function AnalyticsToolRowActions({ tool }: { tool: ToolRow }) {
               target="_blank"
               rel="noopener noreferrer"
               role="menuitem"
-              onClick={() => setOpen(false)}
+              onClick={close}
               className="admin-menu-item"
             >
               <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
               View on site
             </Link>
           )}
-        </div>
+        </>
       )}
-    </div>
+    </AdminRowActionsMenu>
   );
 }

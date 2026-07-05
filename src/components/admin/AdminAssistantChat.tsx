@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Copy, History, MessageSquare, Square, Trash2, Volume2 } from "lucide-react";
-import { ASSISTANT_QUICK_PROMPTS } from "@/lib/assistant-ui";
+import { ASSISTANT_CAPABILITIES } from "@/lib/assistant-ui";
 import {
   AssistantChatHistory,
   type LoadedChatMessage,
@@ -32,6 +32,7 @@ export interface AssistantMessage {
   links?: { label: string; href: string }[];
   cards?: AssistantCard[];
   followUps?: FollowUpPrompt[];
+  receipts?: string[];
 }
 
 function newId() {
@@ -42,10 +43,8 @@ const WELCOME: AssistantMessage = {
   id: "welcome",
   role: "assistant",
   content:
-    "Hi — I'm your TOOLQZ assistant. I can create tools from URLs, manage affiliates, check analytics, publish or delete listings (with your confirmation), and more. Tap the mic to talk, or type below.",
+    "Hi — I'm your TOOLQZ assistant. I can create tools from URLs, manage affiliates, tasks, finances, analytics, and publish or delete (with confirmation). Tap the mic or type below.",
 };
-
-const QUICK_PROMPTS = ASSISTANT_QUICK_PROMPTS;
 
 interface Props {
   variant?: "widget" | "page";
@@ -172,17 +171,22 @@ export function AdminAssistantChat({
   }, []);
 
   const runSend = useCallback(
-    async (text: string) => {
+    async (text: string, confirmToken?: string) => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      if (!trimmed && !confirmToken) return;
 
       stopSpeaking();
       setError("");
-      const userMsg: AssistantMessage = { id: newId(), role: "user", content: trimmed };
-      const nextMessages = [...messagesRef.current, userMsg];
-      setMessages(nextMessages);
+
+      let nextMessages = messagesRef.current;
+      if (trimmed) {
+        const userMsg: AssistantMessage = { id: newId(), role: "user", content: trimmed };
+        nextMessages = [...messagesRef.current, userMsg];
+        setMessages(nextMessages);
+      }
+
       setLoading(true);
-      setLoadingHint("Thinking…");
+      setLoadingHint(confirmToken ? "Confirming…" : "Thinking…");
 
       const streamMsgId = newId();
       let streamContent = "";
@@ -197,6 +201,7 @@ export function AdminAssistantChat({
             .map((m) => ({ role: m.role, content: m.content })),
           pageContext,
           sessionId: sessionIdRef.current,
+          confirmToken,
           signal: abortRef.current.signal,
           onEvent: (event) => {
             if (event.type === "tool_start") {
@@ -228,6 +233,7 @@ export function AdminAssistantChat({
                 links: result.links,
                 cards: result.cards,
                 followUps: result.followUps,
+                receipts: result.receipts,
               };
               setMessages((prev) => {
                 if (streamStarted) {
@@ -271,6 +277,14 @@ export function AdminAssistantChat({
       }
     },
     [pageContext, speakReplies]
+  );
+
+  const runConfirm = useCallback(
+    (token: string) => {
+      if (loadingRef.current || ready === false) return;
+      void runSend("Confirm action", token);
+    },
+    [ready, runSend]
   );
 
   const send = useCallback(
@@ -382,7 +396,6 @@ export function AdminAssistantChat({
   const micBusy = isListening || isRequestingMic;
   const isWidget = variant === "widget";
   const showQuickPrompts = !messages.some((m) => m.role === "user");
-  const showComposerPrompts = showQuickPrompts && isWidget;
   const showEmptyStatePrompts = showQuickPrompts && !isWidget;
 
   function onSubmit(e: React.FormEvent) {
@@ -484,7 +497,20 @@ export function AdminAssistantChat({
                     content={msg.content}
                     cards={msg.cards}
                     onPrompt={(text) => send(text)}
+                    onConfirm={runConfirm}
                   />
+                )}
+                {msg.receipts && msg.receipts.length > 0 && (
+                  <div className="mt-2 space-y-1 border-t border-dark-border/50 pt-2">
+                    {msg.receipts.map((receipt) => (
+                      <p
+                        key={receipt}
+                        className="text-[11px] font-medium text-emerald-400/90"
+                      >
+                        ✓ {receipt}
+                      </p>
+                    ))}
+                  </div>
                 )}
                 {msg.links && msg.links.length > 0 && (
                   <div className="mt-2.5 flex flex-col gap-1.5 border-t border-dark-border/50 pt-2.5">
@@ -567,22 +593,25 @@ export function AdminAssistantChat({
             </div>
           )}
           {showEmptyStatePrompts && (
-            <div className="pt-1">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-muted-dim">
-                Try asking
-              </p>
-              <div className="mt-2.5 flex flex-wrap gap-2">
-                {QUICK_PROMPTS.map((p) => (
-                  <button
-                    key={p.text}
-                    type="button"
-                    disabled={ready === false}
-                    onClick={() => sendFromComposer(p.text)}
-                    className="admin-toolbar-btn disabled:opacity-50"
-                  >
-                    {p.label}
-                  </button>
-                ))}
+            <div className="space-y-4 pt-1">
+              <div>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted-dim">
+                  Capabilities
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                  {ASSISTANT_CAPABILITIES.map((cap) => (
+                    <button
+                      key={cap.title}
+                      type="button"
+                      disabled={ready === false}
+                      onClick={() => sendFromComposer(cap.prompt)}
+                      className="rounded-xl border border-dark-border bg-dark-elevated/80 px-3 py-2.5 text-left transition hover:border-neon/30 disabled:opacity-50"
+                    >
+                      <p className="text-[13px] font-medium text-white">{cap.title}</p>
+                      <p className="mt-0.5 text-[11px] leading-snug text-muted">{cap.description}</p>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -629,21 +658,6 @@ export function AdminAssistantChat({
                   ✕
                 </button>
               </div>
-            ))}
-          </div>
-        )}
-        {showComposerPrompts && (
-          <div className="mb-2 flex flex-wrap justify-center gap-1.5">
-            {QUICK_PROMPTS.map((p) => (
-              <button
-                key={p.text}
-                type="button"
-                disabled={ready === false}
-                onClick={() => sendFromComposer(p.text)}
-                className="rounded-full border border-dark-border bg-dark px-2.5 py-1 text-[11px] text-muted transition hover:border-neon/40 hover:text-neon disabled:opacity-50"
-              >
-                {p.label}
-              </button>
             ))}
           </div>
         )}

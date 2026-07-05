@@ -5,6 +5,7 @@ import { runAgentChatWithEvents } from "@/lib/agent/chat";
 import { saveChatTurn } from "@/lib/agent/chat-sessions";
 import type { ChatTurn } from "@/lib/agent/gemini-chat";
 import { getGeminiConfig } from "@/lib/agent/gemini";
+import { executePendingConfirmation } from "@/lib/agent/pending-confirmation";
 import { requireSession } from "@/lib/auth";
 
 const MAX_MESSAGES = 24;
@@ -41,6 +42,12 @@ function parseSessionId(body: unknown): string | null {
   return id || null;
 }
 
+function parseConfirmToken(body: unknown): string | null {
+  if (!body || typeof body !== "object" || !("confirmToken" in body)) return null;
+  const token = String((body as { confirmToken?: string }).confirmToken ?? "").trim();
+  return token || null;
+}
+
 export async function POST(request: NextRequest) {
   const encoder = new TextEncoder();
 
@@ -58,10 +65,11 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
+    const confirmToken = parseConfirmToken(body);
     const history = parseHistory(body);
     const last = history[history.length - 1];
 
-    if (!last || last.role !== "user") {
+    if (!confirmToken && (!last || last.role !== "user")) {
       return new Response(JSON.stringify({ error: "Send a messages array ending with a user message" }), {
         status: 400,
       });
@@ -77,6 +85,35 @@ export async function POST(request: NextRequest) {
         };
 
         try {
+          if (confirmToken) {
+            const confirmed = await executePendingConfirmation(confirmToken, {
+              userId: session.id,
+              role: session.role,
+            });
+            send({ type: "text_delta", delta: confirmed.reply });
+            let sessionId = existingSessionId;
+            try {
+              sessionId = await saveChatTurn(session.id, existingSessionId, "Confirm action", {
+                reply: confirmed.reply,
+                links: confirmed.links,
+                cards: confirmed.cards,
+              });
+            } catch (error) {
+              console.error("[admin/agent/chat/stream] session save failed", error);
+            }
+            send({
+              type: "done",
+              result: {
+                reply: confirmed.reply,
+                links: confirmed.links,
+                cards: confirmed.cards,
+                receipts: [confirmed.reply],
+                sessionId: sessionId ?? undefined,
+              },
+            });
+            return;
+          }
+
           const result = await runAgentChatWithEvents(
             history,
             { userId: session.id, role: session.role },
@@ -87,11 +124,16 @@ export async function POST(request: NextRequest) {
 
           let sessionId = existingSessionId;
           try {
-            sessionId = await saveChatTurn(session.id, existingSessionId, last.content, {
-              reply: result.reply,
-              links: result.links,
-              cards: result.cards,
-            });
+            sessionId = await saveChatTurn(
+              session.id,
+              existingSessionId,
+              last?.content ?? "Confirm action",
+              {
+                reply: result.reply,
+                links: result.links,
+                cards: result.cards,
+              }
+            );
           } catch (error) {
             console.error("[admin/agent/chat/stream] session save failed", error);
           }

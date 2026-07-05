@@ -1,4 +1,6 @@
 import { prisma } from "@/lib/db";
+import { partnerMissingAffiliateWhere } from "./catalog-filters";
+import { getAdminTaskSummaryForUser } from "./task-agent";
 
 export async function getMyWorkSummary(userId: string) {
   const now = new Date();
@@ -14,6 +16,7 @@ export async function getMyWorkSummary(userId: string) {
     programsNoTool,
     overduePrograms,
     followUpsDue,
+    tasks,
   ] = await Promise.all([
     prisma.affiliateProgram.count({ where: { assignedToId: userId } }),
     prisma.affiliateProgram.count({
@@ -27,7 +30,7 @@ export async function getMyWorkSummary(userId: string) {
       where: { assignedToId: userId, status: "IN_PROGRESS" },
     }),
     prisma.tool.count({ where: { published: false } }),
-    prisma.tool.count({ where: { published: true, affiliateUrl: null } }),
+    prisma.tool.count({ where: partnerMissingAffiliateWhere }),
     prisma.affiliateProgram.count({ where: { toolId: null } }),
     prisma.affiliateProgram.findMany({
       where: {
@@ -45,6 +48,7 @@ export async function getMyWorkSummary(userId: string) {
         status: { notIn: ["ACTIVE", "REJECTED", "NOT_AVAILABLE"] },
       },
     }),
+    getAdminTaskSummaryForUser(userId),
   ]);
 
   return {
@@ -61,5 +65,6 @@ export async function getMyWorkSummary(userId: string) {
       due: p.nextFollowUpAt?.toISOString().slice(0, 10) ?? "—",
       editUrl: `/admin/affiliates/${p.id}`,
     })),
+    tasks,
   };
 }

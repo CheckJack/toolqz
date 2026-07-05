@@ -15,6 +15,7 @@
     "lint": "eslint",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:prod": "node scripts/migrate-production.mjs",
+    "db:migrate:resolve": "node scripts/migrate-resolve-production.mjs",
     "db:migrate:dev": "prisma migrate dev",
     "db:push": "prisma db push",
     "db:seed": "tsx prisma/seed.ts",
@@ -26,6 +27,7 @@
     "hostinger:logs": "node scripts/hostinger.mjs logs",
     "hostinger:setup-mcp": "node scripts/hostinger.mjs setup-mcp",
     "ga4:env": "node scripts/ga4-env-oneline.mjs",
+    "test": "node --import tsx --test src/lib/agent/__tests__/*.test.ts",
     "postinstall": "node scripts/sync-prisma-provider.mjs && prisma generate"
   },
   "prisma": {

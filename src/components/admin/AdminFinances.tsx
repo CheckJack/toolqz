@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { MoreVertical, Pencil, Search, Trash2 } from "lucide-react";
+import { Pencil, Search, Trash2 } from "lucide-react";
 import { SessionUser } from "@/lib/auth";
 import { formatMoney } from "@/lib/finance";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminRowActionsMenu } from "@/components/admin/AdminRowActionsMenu";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { AdminChartCard } from "@/components/admin/charts/AdminChartCard";
 import { DonutBreakdownChart } from "@/components/admin/charts/DonutBreakdownChart";
@@ -658,53 +659,15 @@ function FinanceRowActions({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    function onPointerDown(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mousedown", onPointerDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mousedown", onPointerDown);
-    };
-  }, [open]);
-
   return (
-    <div ref={rootRef} className="relative inline-flex justify-end">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="admin-icon-btn h-8 w-8"
-        aria-label={`Actions for ${entry.description}`}
-        aria-expanded={open}
-        aria-haspopup="menu"
-      >
-        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[10.5rem] py-1"
-        >
+    <AdminRowActionsMenu label={`Actions for ${entry.description}`}>
+      {(close) => (
+        <>
           <button
             type="button"
             role="menuitem"
             onClick={() => {
-              setOpen(false);
+              close();
               onEdit();
             }}
             className="admin-menu-item w-full"
@@ -717,7 +680,7 @@ function FinanceRowActions({
               type="button"
               role="menuitem"
               onClick={() => {
-                setOpen(false);
+                close();
                 onDelete();
               }}
               className="admin-menu-item w-full text-red-400 hover:text-red-300"
@@ -726,8 +689,8 @@ function FinanceRowActions({
               Delete
             </button>
           )}
-        </div>
+        </>
       )}
-    </div>
+    </AdminRowActionsMenu>
   );
 }

@@ -56,14 +56,41 @@ export const AGENT_FUNCTION_DECLARATIONS = [
           description: `Category slug: ${DEFAULT_TOOL_CATEGORY_SLUGS.join(", ")}`,
         },
         published: { type: "boolean" },
+        listing_type: {
+          type: "string",
+          description: "AFFILIATE (partner) or EDITORIAL (pick without affiliate link)",
+        },
+        featured: { type: "boolean", description: "Filter homepage featured tools" },
         limit: { type: "number" },
       },
     },
   },
   {
+    name: "set_tool_listing_type",
+    description:
+      "Set whether a tool is an AFFILIATE partner (uses tracking URL on /go) or an EDITORIAL pick (no affiliate disclosure).",
+    parameters: {
+      type: "object",
+      properties: {
+        tool_slug: { type: "string" },
+        tool_name: { type: "string" },
+        tool_id: { type: "string" },
+        listing_type: {
+          type: "string",
+          description: "AFFILIATE or EDITORIAL (required)",
+        },
+        affiliate_url: {
+          type: "string",
+          description: "Tracking URL — required when setting AFFILIATE",
+        },
+      },
+      required: ["listing_type"],
+    },
+  },
+  {
     name: "get_tool_issues",
     description:
-      "Summarize catalog health issues: drafts, published tools missing affiliate URLs, zero-click published tools, active CRM without URL on tool.",
+      "Summarize catalog health: drafts, affiliate partners missing tracking URLs (editorial picks excluded), zero-click published tools, active CRM without URL on tool.",
     parameters: { type: "object", properties: {} },
   },
   {
@@ -218,7 +245,7 @@ export const AGENT_FUNCTION_DECLARATIONS = [
   {
     name: "update_affiliate",
     description:
-      "Update an affiliate CRM program: status, next follow-up date, notes, or assignment.",
+      "Update an affiliate CRM program: status, follow-up, notes, assignment, portal_url, signup_url, affiliate_url.",
     parameters: {
       type: "object",
       properties: {
@@ -237,6 +264,25 @@ export const AGENT_FUNCTION_DECLARATIONS = [
           type: "boolean",
           description: "Assign this program to the current user",
         },
+        portal_url: { type: "string", description: "Affiliate dashboard login URL" },
+        signup_url: { type: "string", description: "Program signup / application URL" },
+        affiliate_url: { type: "string", description: "Tracking link for the tool listing" },
+      },
+    },
+  },
+  {
+    name: "list_affiliate_directory",
+    description:
+      "List ACTIVE affiliate partner programs in the directory (dashboard links, not full CRM pipeline).",
+    parameters: {
+      type: "object",
+      properties: {
+        search: { type: "string", description: "Company name search" },
+        missing_portal: {
+          type: "boolean",
+          description: "Only active programs missing a dashboard (portal) URL",
+        },
+        limit: { type: "number" },
       },
     },
   },
@@ -275,7 +321,7 @@ export const AGENT_FUNCTION_DECLARATIONS = [
   {
     name: "get_my_work",
     description:
-      "Personal work queue: assigned affiliates, overdue follow-ups, draft tools, and catalog issues counts.",
+      "Personal work queue: CRM assignments, overdue follow-ups, admin tasks assigned to you, draft tools, and catalog issues counts.",
     parameters: { type: "object", properties: {} },
   },
   {
@@ -306,6 +352,115 @@ export const AGENT_FUNCTION_DECLARATIONS = [
       },
     },
   },
+  {
+    name: "list_tasks",
+    description:
+      "List admin tasks from the Tasks board. Filter by section (general, content, affiliates, catalog, ops), status (TODO, IN_PROGRESS, DONE), assignee (me or unassigned), search, or overdue_only.",
+    parameters: {
+      type: "object",
+      properties: {
+        section: { type: "string", description: "general, content, affiliates, catalog, ops" },
+        status: { type: "string", description: "TODO, IN_PROGRESS, or DONE" },
+        assignee: { type: "string", description: "me or unassigned" },
+        search: { type: "string" },
+        overdue_only: { type: "boolean" },
+        limit: { type: "number" },
+      },
+    },
+  },
+  {
+    name: "create_task",
+    description:
+      "Create a task on the Tasks board. Requires title. Optional: section, status, priority, due_at (YYYY-MM-DD), description, assign_to_me, assignee_name.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string" },
+        description: { type: "string" },
+        section: { type: "string", description: "general, content, affiliates, catalog, ops" },
+        status: { type: "string", description: "TODO, IN_PROGRESS, DONE" },
+        priority: { type: "string", description: "LOW, MEDIUM, HIGH, URGENT" },
+        due_at: { type: "string", description: "YYYY-MM-DD" },
+        assign_to_me: { type: "boolean" },
+        assignee_name: { type: "string", description: "Team member name" },
+        link_url: { type: "string", description: "Optional admin link e.g. /admin/tools" },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "update_task",
+    description:
+      "Update a task by task_id or task_title. Can change title, description, section, status, priority, due_at, assignee, mark_done.",
+    parameters: {
+      type: "object",
+      properties: {
+        task_id: { type: "string" },
+        task_title: { type: "string", description: "Search by title if ID unknown" },
+        title: { type: "string" },
+        description: { type: "string" },
+        section: { type: "string" },
+        status: { type: "string" },
+        priority: { type: "string" },
+        due_at: { type: "string" },
+        assign_to_me: { type: "boolean" },
+        assignee_name: { type: "string" },
+        mark_done: { type: "boolean" },
+        link_url: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "delete_task",
+    description: "Permanently delete a task (admin only, requires confirmation).",
+    parameters: {
+      type: "object",
+      properties: {
+        task_id: { type: "string" },
+        task_title: { type: "string" },
+        confirm: { type: "boolean" },
+      },
+    },
+  },
+  {
+    name: "create_finance_entry",
+    description: "Add an earning or expense to the finance ledger.",
+    parameters: {
+      type: "object",
+      properties: {
+        type: { type: "string", description: "EARNING or EXPENSE" },
+        amount: { type: "number" },
+        description: { type: "string" },
+        source: { type: "string", description: "Optional source label" },
+        occurred_at: { type: "string", description: "YYYY-MM-DD" },
+        notes: { type: "string" },
+      },
+      required: ["type", "amount", "description"],
+    },
+  },
+  {
+    name: "list_finance_entries",
+    description: "List recent finance ledger entries (earnings and expenses).",
+    parameters: {
+      type: "object",
+      properties: {
+        type: { type: "string", description: "EARNING or EXPENSE" },
+        search: { type: "string" },
+        limit: { type: "number" },
+      },
+    },
+  },
+  {
+    name: "list_team_members",
+    description: "List admin team members (for assigning tasks or affiliates).",
+    parameters: {
+      type: "object",
+      properties: {
+        search: { type: "string" },
+        limit: { type: "number" },
+      },
+    },
+  },
 ] as const;
 
 export type AgentToolName =
@@ -313,6 +468,7 @@ export type AgentToolName =
   | "create_tools"
   | "update_tool"
   | "list_tools"
+  | "set_tool_listing_type"
   | "get_tool_issues"
   | "feature_tool"
   | "create_category"
@@ -323,13 +479,21 @@ export type AgentToolName =
   | "publish_tool"
   | "delete_tool"
   | "list_affiliates"
+  | "list_affiliate_directory"
   | "update_affiliate"
   | "create_tool_from_affiliate"
   | "get_analytics"
   | "get_my_work"
   | "get_finance_summary"
   | "search_audit_log"
-  | "list_subscribers";
+  | "list_subscribers"
+  | "list_tasks"
+  | "create_task"
+  | "update_task"
+  | "delete_task"
+  | "create_finance_entry"
+  | "list_finance_entries"
+  | "list_team_members";
 
 export interface ChatLink {
   label: string;
@@ -348,6 +512,7 @@ export interface AgentChatResult {
   links?: ChatLink[];
   cards?: import("./assistant-cards").AssistantCard[];
   followUps?: FollowUpPrompt[];
+  receipts?: string[];
   sessionId?: string;
 }
 

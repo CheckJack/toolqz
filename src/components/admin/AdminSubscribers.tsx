@@ -1,8 +1,9 @@
 "use client";
 
-import { Mail, MoreVertical, Search, Trash2, Upload, UserMinus, UserPlus } from "lucide-react";
+import { Mail, Search, Trash2, Upload, UserMinus, UserPlus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
+import { AdminRowActionsMenu } from "@/components/admin/AdminRowActionsMenu";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { useToast } from "@/components/admin/Toast";
 import { parseCsv } from "@/lib/csv-parse";
@@ -622,54 +623,16 @@ function SubscriberRowActions({
   onUpdateStatus: (id: string, status: "ACTIVE" | "UNSUBSCRIBED") => void;
   onDelete: (id: string, email: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    function onKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") setOpen(false);
-    }
-
-    function onPointerDown(event: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-
-    window.addEventListener("keydown", onKeyDown);
-    window.addEventListener("mousedown", onPointerDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("mousedown", onPointerDown);
-    };
-  }, [open]);
-
   return (
-    <div ref={rootRef} className="relative inline-flex justify-end">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="admin-icon-btn h-8 w-8"
-        aria-label={`Actions for ${subscriber.email}`}
-        aria-expanded={open}
-        aria-haspopup="menu"
-      >
-        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[10.5rem] py-1"
-        >
+    <AdminRowActionsMenu label={`Actions for ${subscriber.email}`}>
+      {(close) => (
+        <>
           {subscriber.status === "ACTIVE" ? (
             <button
               type="button"
               role="menuitem"
               onClick={() => {
-                setOpen(false);
+                close();
                 void onUpdateStatus(subscriber.id, "UNSUBSCRIBED");
               }}
               className="admin-menu-item w-full"
@@ -682,7 +645,7 @@ function SubscriberRowActions({
               type="button"
               role="menuitem"
               onClick={() => {
-                setOpen(false);
+                close();
                 void onUpdateStatus(subscriber.id, "ACTIVE");
               }}
               className="admin-menu-item w-full"
@@ -695,7 +658,7 @@ function SubscriberRowActions({
             type="button"
             role="menuitem"
             onClick={() => {
-              setOpen(false);
+              close();
               void onDelete(subscriber.id, subscriber.email);
             }}
             className="admin-menu-item w-full text-red-400 hover:text-red-300"
@@ -703,8 +666,8 @@ function SubscriberRowActions({
             <Trash2 className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
             Delete
           </button>
-        </div>
+        </>
       )}
-    </div>
+    </AdminRowActionsMenu>
   );
 }

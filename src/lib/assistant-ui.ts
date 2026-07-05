@@ -1,31 +1,33 @@
-export const ASSISTANT_QUICK_PROMPTS = [
-  { label: "My work", text: "What's on my work queue?" },
-  { label: "Analytics", text: "Show click analytics for the last 30 days" },
-  { label: "Issues", text: "Show tool issues" },
-  { label: "Affiliates", text: "List affiliate programs without a tool" },
-  { label: "Finance", text: "Show finance summary" },
-] as const;
-
 export const ASSISTANT_CAPABILITIES = [
   {
     title: "Tools & listings",
-    description: "Create or refresh tools from URLs, publish, and fix issues.",
+    description: "Create drafts from URLs, set partner vs editorial, publish with confirmation.",
+    prompt: "List draft tools",
+  },
+  {
+    title: "Affiliate directory",
+    description: "Active partners, dashboard links, missing portal URLs.",
+    prompt: "List active affiliates missing dashboard links",
   },
   {
     title: "Affiliate CRM",
-    description: "Search programs, update status, and link tools to CRM rows.",
+    description: "Pipeline status, follow-ups, portal and tracking URLs.",
+    prompt: "List affiliate programs without a tool",
   },
   {
-    title: "Analytics",
-    description: "Summarize clicks, top performers, and traffic trends.",
+    title: "Analytics & finance",
+    description: "Clicks, top tools, earnings and expenses.",
+    prompt: "Show click analytics for the last 30 days",
   },
   {
     title: "Content",
     description: "Draft blog posts and manage categories.",
+    prompt: "List draft blog posts",
   },
   {
-    title: "Team chat",
-    description: "For direct messages, use Audience → Messages.",
+    title: "Tasks",
+    description: "Create, list, and update team tasks on the Tasks board.",
+    prompt: "List tasks assigned to me",
   },
 ] as const;
 

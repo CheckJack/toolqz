@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/db";
+import { partnerMissingAffiliateWhere } from "./catalog-filters";
 
 export async function getToolIssuesSummary() {
   const [publishedNoAffiliate, zeroClickPublished, activeCrmNoUrl, draftCount] =
     await Promise.all([
       prisma.tool.findMany({
-        where: { published: true, affiliateUrl: null },
+        where: partnerMissingAffiliateWhere,
         select: { id: true, name: true, slug: true },
         orderBy: { name: "asc" },
         take: 10,
@@ -17,6 +18,7 @@ export async function getToolIssuesSummary() {
       }),
       prisma.tool.findMany({
         where: {
+          listingType: "AFFILIATE",
           affiliateUrl: null,
           affiliate: { is: { status: "ACTIVE" } },
         },
@@ -29,10 +31,11 @@ export async function getToolIssuesSummary() {
 
   const [publishedNoAffiliateTotal, zeroClickTotal, activeCrmNoUrlTotal] =
     await Promise.all([
-      prisma.tool.count({ where: { published: true, affiliateUrl: null } }),
+      prisma.tool.count({ where: partnerMissingAffiliateWhere }),
       prisma.tool.count({ where: { published: true, clicks: { none: {} } } }),
       prisma.tool.count({
         where: {
+          listingType: "AFFILIATE",
           affiliateUrl: null,
           affiliate: { is: { status: "ACTIVE" } },
         },

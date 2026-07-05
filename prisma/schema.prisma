@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model User {
@@ -28,6 +29,8 @@ model User {
   blogPosts          BlogPost[]
   chatSessions       AdminChatSession[]
   passwordResetTokens PasswordResetToken[]
+  assignedTasks      AdminTask[]          @relation("AssignedTasks")
+  createdTasks         AdminTask[]          @relation("CreatedTasks")
 }
 
 model PasswordResetToken {
@@ -323,4 +326,29 @@ model AdminChatMessage {
   createdAt DateTime         @default(now())
 
   @@index([sessionId, createdAt])
+}
+
+model AdminTask {
+  id           String    @id @default(cuid())
+  title        String
+  description  String?
+  section      String    @default("general")
+  status       String    @default("TODO")
+  priority     String    @default("MEDIUM")
+  dueAt        DateTime?
+  sortOrder    Int       @default(0)
+  linkUrl      String?
+  linkLabel    String?
+  assignedToId String?
+  assignedTo   User?     @relation("AssignedTasks", fields: [assignedToId], references: [id], onDelete: SetNull)
+  createdById  String?
+  createdBy    User?     @relation("CreatedTasks", fields: [createdById], references: [id], onDelete: SetNull)
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([section, status, sortOrder])
+  @@index([assignedToId])
+  @@index([dueAt])
+  @@index([status])
 }

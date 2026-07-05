@@ -5,6 +5,7 @@ export interface StreamChatOptions {
   messages: { role: "user" | "assistant"; content: string }[];
   pageContext?: string;
   sessionId?: string | null;
+  confirmToken?: string | null;
   signal?: AbortSignal;
   onEvent: (event: AgentStreamEvent) => void;
 }
@@ -17,6 +18,7 @@ export async function streamAssistantChat(options: StreamChatOptions): Promise<v
       messages: options.messages,
       pageContext: options.pageContext,
       sessionId: options.sessionId,
+      confirmToken: options.confirmToken,
     }),
     signal: options.signal,
   });

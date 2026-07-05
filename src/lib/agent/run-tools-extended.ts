@@ -5,21 +5,34 @@ import { buildBlogData, serializeBlogPost } from "@/lib/blog-payload";
 import { prisma } from "@/lib/db";
 import type { SessionUser } from "@/lib/auth";
 import { saveAgentToolDraft } from "./create-tool";
+import { maskSubscriberEmail } from "./catalog-filters";
+import { needsConfirmationWithToken } from "./confirm-flow";
 import {
   cardFromConfirmation,
+  cardsFromAffiliateDirectory,
   cardsFromAuditLog,
   cardsFromBlogList,
   cardsFromFinance,
+  cardsFromFinanceEntries,
   cardsFromMyWork,
   cardsFromSubscribers,
+  cardsFromTasks,
+  cardsFromTeamMembers,
   cardsFromToolIssues,
   type AssistantCard,
 } from "./assistant-cards";
 import { getAgentFinanceSummary } from "./finance-summary";
 import { getMyWorkSummary } from "./my-work";
+import {
+  createAdminTaskForAgent,
+  findAdminTask,
+  listAdminTasksForAgent,
+  updateAdminTaskForAgent,
+} from "./task-agent";
 import { researchToolDraft } from "./tool-research";
 import { getToolIssuesSummary } from "./tool-issues";
 import type { AgentExecutionContext, AgentToolName } from "./definitions";
+import { isFinanceType, parseFinanceAmount, DEFAULT_CURRENCY } from "@/lib/finance";
 
 async function findTool(args: Record<string, unknown>) {
   const id = typeof args.tool_id === "string" ? args.tool_id.trim() : "";
@@ -71,11 +84,13 @@ async function findBlog(args: Record<string, unknown>) {
 }
 
 function needsConfirmation(
+  userId: string,
+  tool: AgentToolName,
+  args: Record<string, unknown>,
   confirm: unknown,
   preview: Record<string, unknown>
-): { needsConfirmation: true } & Record<string, unknown> | null {
-  if (confirm === true) return null;
-  return { needsConfirmation: true, ...preview };
+) {
+  return needsConfirmationWithToken(userId, tool, args, confirm, preview);
 }
 
 function toSessionUser(ctx: AgentExecutionContext): SessionUser {
@@ -121,7 +136,10 @@ export async function executeExtendedAgentTool(
     return {
       result: summary,
       cards: cardsFromMyWork(summary),
-      links: [{ label: "Dashboard", href: "/admin" }],
+      links: [
+        { label: "Tasks", href: "/admin/tasks" },
+        { label: "Dashboard", href: "/admin" },
+      ],
     };
   }
 
@@ -140,7 +158,7 @@ export async function executeExtendedAgentTool(
 
     const featured = args.featured !== false;
     const action = featured ? "feature" : "unfeature";
-    const preview = needsConfirmation(args.confirm, {
+    const preview = needsConfirmation(ctx.userId, "feature_tool", args, args.confirm, {
       action,
       tool: { id: tool.id, name: tool.name, slug: tool.slug, currentlyFeatured: tool.featured },
       message: featured
@@ -148,7 +166,7 @@ export async function executeExtendedAgentTool(
         : `"${tool.name}" will be removed from featured sections.`,
     });
     if (preview) {
-      return { result: preview, cards: [cardFromConfirmation(preview)] };
+      return { result: preview, cards: [cardFromConfirmation(preview, preview.confirmationToken)] };
     }
 
     if (tool.featured === featured) {
@@ -259,7 +277,7 @@ export async function executeExtendedAgentTool(
 
     const published = args.published !== false;
     const action = published ? "publish_blog" : "unpublish_blog";
-    const preview = needsConfirmation(args.confirm, {
+    const preview = needsConfirmation(ctx.userId, "publish_blog", args, args.confirm, {
       action,
       post: { id: post.id, title: post.title, slug: post.slug, currentlyPublished: post.published },
       message: published
@@ -267,7 +285,7 @@ export async function executeExtendedAgentTool(
         : `"${post.title}" will be hidden from the public blog.`,
     });
     if (preview) {
-      return { result: preview, cards: [cardFromConfirmation(preview)] };
+      return { result: preview, cards: [cardFromConfirmation(preview, preview.confirmationToken)] };
     }
 
     if (post.published === published) {
@@ -320,6 +338,15 @@ export async function executeExtendedAgentTool(
     if (typeof args.notes === "string") {
       patch.notes = args.notes.trim() || null;
     }
+    if (typeof args.portal_url === "string") {
+      patch.portalUrl = args.portal_url.trim() || null;
+    }
+    if (typeof args.signup_url === "string") {
+      patch.signupUrl = args.signup_url.trim() || null;
+    }
+    if (typeof args.affiliate_url === "string") {
+      patch.affiliateUrl = args.affiliate_url.trim() || null;
+    }
     if (typeof args.next_follow_up === "string" && args.next_follow_up.trim()) {
       const d = new Date(args.next_follow_up.trim());
       if (Number.isNaN(d.getTime())) throw new Error("Invalid next_follow_up date — use YYYY-MM-DD");
@@ -330,7 +357,9 @@ export async function executeExtendedAgentTool(
     }
 
     if (Object.keys(patch).length === 0) {
-      throw new Error("Provide at least one field to update: status, notes, next_follow_up, or assigned_to_me");
+      throw new Error(
+        "Provide at least one field: status, notes, next_follow_up, assigned_to_me, portal_url, signup_url, or affiliate_url"
+      );
     }
 
     assertCanPatchAffiliate(session, affiliate, patch);
@@ -411,7 +440,7 @@ export async function executeExtendedAgentTool(
     ]);
 
     const subscribers = items.map((s) => ({
-      email: s.email,
+      email: maskSubscriberEmail(s.email),
       name: s.name ?? "—",
       subscribedAt: s.subscribedAt.toISOString().slice(0, 10),
     }));
@@ -420,6 +449,237 @@ export async function executeExtendedAgentTool(
       result: { total, showing: items.length, subscribers },
       cards: cardsFromSubscribers({ total, showing: items.length, subscribers }),
       links: [{ label: "Mailing list", href: "/admin/subscribers" }],
+    };
+  }
+
+  if (name === "list_affiliate_directory") {
+    const search = typeof args.search === "string" ? args.search.trim() : "";
+    const missingPortal = args.missing_portal === true;
+    const limit = Math.min(30, Math.max(1, Number(args.limit) || 15));
+
+    const where = {
+      status: "ACTIVE",
+      ...(search ? { companyName: { contains: search } } : {}),
+      ...(missingPortal
+        ? {
+            OR: [{ portalUrl: null }, { portalUrl: "" }],
+          }
+        : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      prisma.affiliateProgram.findMany({
+        where,
+        select: {
+          id: true,
+          companyName: true,
+          status: true,
+          toolId: true,
+          portalUrl: true,
+        },
+        orderBy: { companyName: "asc" },
+        take: limit,
+      }),
+      prisma.affiliateProgram.count({ where }),
+    ]);
+
+    const programs = items.map((a) => ({
+      companyName: a.companyName,
+      status: a.status,
+      hasTool: !!a.toolId,
+      hasPortal: Boolean(a.portalUrl?.trim()),
+      editUrl: `/admin/affiliates/${a.id}`,
+      directoryUrl: "/admin/affiliate-directory",
+    }));
+
+    return {
+      result: { total, showing: items.length, programs },
+      cards: cardsFromAffiliateDirectory({ total, showing: items.length, programs }),
+      links: [{ label: "Affiliate directory", href: "/admin/affiliate-directory" }],
+    };
+  }
+
+  if (name === "list_tasks") {
+    const result = await listAdminTasksForAgent(args, ctx.userId);
+    return {
+      result,
+      cards: cardsFromTasks(result),
+      links: [{ label: "Tasks board", href: "/admin/tasks" }],
+    };
+  }
+
+  if (name === "create_task") {
+    const task = await createAdminTaskForAgent(args, ctx.userId);
+    await logAudit("create", "task", `Assistant created task "${task.title}"`, {
+      userId: ctx.userId,
+      entityId: task.id,
+    });
+    return {
+      result: { success: true, task },
+      links: [{ label: task.title, href: "/admin/tasks" }],
+    };
+  }
+
+  if (name === "update_task") {
+    const task = await updateAdminTaskForAgent(args, ctx.userId);
+    await logAudit("update", "task", `Assistant updated task "${task.title}"`, {
+      userId: ctx.userId,
+      entityId: task.id,
+    });
+    return {
+      result: { success: true, task },
+      links: [{ label: task.title, href: "/admin/tasks" }],
+    };
+  }
+
+  if (name === "delete_task") {
+    const task = await findAdminTask(args);
+    if (!task) throw new Error("Task not found — provide task_id or task_title");
+
+    const preview = needsConfirmation(ctx.userId, "delete_task", args, args.confirm, {
+      action: "delete",
+      task: { id: task.id, title: task.title, status: task.status },
+      message: `This permanently deletes the task "${task.title}".`,
+    });
+    if (preview) {
+      return {
+        result: preview,
+        cards: [cardFromConfirmation(preview, preview.confirmationToken)],
+      };
+    }
+
+    await prisma.adminTask.delete({ where: { id: task.id } });
+    await logAudit("delete", "task", `Assistant deleted task "${task.title}"`, {
+      userId: ctx.userId,
+      entityId: task.id,
+    });
+
+    return {
+      result: { success: true, deleted: task.title },
+      links: [{ label: "Tasks", href: "/admin/tasks" }],
+    };
+  }
+
+  if (name === "create_finance_entry") {
+    const type = typeof args.type === "string" ? args.type.trim().toUpperCase() : "";
+    if (!isFinanceType(type)) throw new Error("type must be EARNING or EXPENSE");
+
+    const amount = parseFinanceAmount(args.amount);
+    if (amount === null) throw new Error("amount is required");
+
+    const description = typeof args.description === "string" ? args.description.trim() : "";
+    if (!description) throw new Error("description is required");
+
+    const source = typeof args.source === "string" ? args.source.trim() || null : null;
+    const notes = typeof args.notes === "string" ? args.notes.trim() || null : null;
+    const occurredAtRaw = typeof args.occurred_at === "string" ? args.occurred_at.trim() : "";
+    const occurredAt = occurredAtRaw ? new Date(occurredAtRaw) : new Date();
+    if (Number.isNaN(occurredAt.getTime())) throw new Error("Invalid occurred_at date");
+
+    const entry = await prisma.financeEntry.create({
+      data: {
+        type,
+        amount,
+        currency: DEFAULT_CURRENCY,
+        description,
+        source,
+        notes,
+        occurredAt,
+        createdById: ctx.userId,
+      },
+    });
+
+    await logAudit("create", "finance", `Assistant added ${type.toLowerCase()}: ${description}`, {
+      userId: ctx.userId,
+      entityId: entry.id,
+    });
+
+    return {
+      result: {
+        success: true,
+        id: entry.id,
+        type: entry.type,
+        amount: entry.amount,
+        description: entry.description,
+      },
+      links: [{ label: "Finances", href: "/admin/finances" }],
+    };
+  }
+
+  if (name === "list_finance_entries") {
+    const type = typeof args.type === "string" ? args.type.trim().toUpperCase() : "";
+    const search = typeof args.search === "string" ? args.search.trim() : "";
+    const limit = Math.min(30, Math.max(1, Number(args.limit) || 15));
+
+    const where = {
+      ...(type && isFinanceType(type) ? { type } : {}),
+      ...(search
+        ? {
+            OR: [{ description: { contains: search } }, { source: { contains: search } }],
+          }
+        : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      prisma.financeEntry.findMany({
+        where,
+        orderBy: { occurredAt: "desc" },
+        take: limit,
+        select: {
+          type: true,
+          amount: true,
+          description: true,
+          occurredAt: true,
+        },
+      }),
+      prisma.financeEntry.count({ where }),
+    ]);
+
+    const entries = items.map((e) => ({
+      type: e.type,
+      amount: e.amount,
+      description: e.description,
+      occurredAt: e.occurredAt.toISOString().slice(0, 10),
+    }));
+
+    return {
+      result: { total, showing: items.length, entries },
+      cards: cardsFromFinanceEntries({ total, showing: items.length, entries }),
+      links: [{ label: "Finances", href: "/admin/finances" }],
+    };
+  }
+
+  if (name === "list_team_members") {
+    const search = typeof args.search === "string" ? args.search.trim() : "";
+    const limit = Math.min(30, Math.max(1, Number(args.limit) || 15));
+
+    const where = search
+      ? {
+          OR: [{ name: { contains: search } }, { email: { contains: search } }],
+        }
+      : {};
+
+    const [items, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: { id: true, name: true, email: true, role: true },
+        orderBy: { name: "asc" },
+        take: limit,
+      }),
+      prisma.user.count({ where }),
+    ]);
+
+    const members = items.map((m) => ({
+      id: m.id,
+      name: m.name,
+      email: m.email,
+      role: m.role,
+    }));
+
+    return {
+      result: { total, showing: items.length, members },
+      cards: cardsFromTeamMembers({ total, showing: items.length, members }),
+      links: [{ label: "Team", href: "/admin/team" }],
     };
   }
 
@@ -435,7 +695,15 @@ export const EXTENDED_AGENT_TOOLS = new Set<AgentToolName>([
   "list_blog_posts",
   "publish_blog",
   "update_affiliate",
+  "list_affiliate_directory",
   "get_finance_summary",
   "search_audit_log",
   "list_subscribers",
+  "list_tasks",
+  "create_task",
+  "update_task",
+  "delete_task",
+  "create_finance_entry",
+  "list_finance_entries",
+  "list_team_members",
 ]);

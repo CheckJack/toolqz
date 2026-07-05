@@ -104,20 +104,37 @@ function RankedListCard({ card }: { card: Extract<AssistantCard, { type: "ranked
         {card.title}
       </p>
       <ul className="divide-y divide-dark-border/50">
-        {card.items.map((item, i) => (
-          <li key={`${item.label}-${i}`} className="flex items-center gap-2 px-3 py-2">
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-neon/10 text-[10px] font-semibold text-neon">
-              {i + 1}
-            </span>
-            <span className="min-w-0 flex-1 truncate text-[13px] text-white">{item.label}</span>
-            {item.value !== undefined && (
-              <span className="shrink-0 text-[13px] tabular-nums text-muted">
-                {item.value}
-                {item.hint ? ` ${item.hint}` : ""}
+        {card.items.map((item, i) => {
+          const inner = (
+            <>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-neon/10 text-[10px] font-semibold text-neon">
+                {i + 1}
               </span>
-            )}
-          </li>
-        ))}
+              <span className="min-w-0 flex-1 truncate text-[13px] text-white">{item.label}</span>
+              {item.value !== undefined && (
+                <span className="shrink-0 text-[13px] tabular-nums text-muted">
+                  {item.value}
+                  {item.hint ? ` ${item.hint}` : ""}
+                </span>
+              )}
+            </>
+          );
+
+          return (
+            <li key={`${item.label}-${i}`}>
+              {item.href ? (
+                <Link
+                  href={item.href}
+                  className="flex items-center gap-2 px-3 py-2 transition hover:bg-neon/5"
+                >
+                  {inner}
+                </Link>
+              ) : (
+                <div className="flex items-center gap-2 px-3 py-2">{inner}</div>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
@@ -154,6 +171,11 @@ function ToolListCard({ card }: { card: Extract<AssistantCard, { type: "tool_lis
               >
                 {tool.published ? "Live" : "Draft"}
               </span>
+              {tool.listingType && (
+                <span className="shrink-0 rounded-full bg-dark-border px-2 py-0.5 text-[10px] text-muted">
+                  {tool.listingType === "AFFILIATE" ? "Partner" : "Editorial"}
+                </span>
+              )}
             </Link>
           </li>
         ))}
@@ -203,6 +225,11 @@ function AffiliateListCard({ card }: { card: Extract<AssistantCard, { type: "aff
                   No tool
                 </span>
               )}
+              {a.hasPortal === false && (
+                <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-300">
+                  No portal
+                </span>
+              )}
             </Link>
           </li>
         ))}
@@ -214,9 +241,11 @@ function AffiliateListCard({ card }: { card: Extract<AssistantCard, { type: "aff
 function AlertCard({
   card,
   onPrompt,
+  onConfirm,
 }: {
   card: Extract<AssistantCard, { type: "alert" }>;
   onPrompt?: (text: string) => void;
+  onConfirm?: (token: string) => void;
 }) {
   const styles = {
     warning: "border-amber-500/30 bg-amber-500/5 text-amber-100",
@@ -228,11 +257,17 @@ function AlertCard({
     <div className={`rounded-xl border px-3 py-2.5 ${styles}`}>
       {card.title && <p className="text-[13px] font-semibold text-white">{card.title}</p>}
       <p className={`text-[12px] leading-relaxed ${card.title ? "mt-1" : ""}`}>{card.message}</p>
-      {card.confirmPrompt && onPrompt && (
+      {card.confirmPrompt && (onConfirm || onPrompt) && (
         <div className="mt-2.5 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => onPrompt(card.confirmPrompt!.yes)}
+            onClick={() => {
+              if (card.confirmPrompt?.token && onConfirm) {
+                onConfirm(card.confirmPrompt.token);
+              } else if (onPrompt) {
+                onPrompt(card.confirmPrompt!.yes);
+              }
+            }}
             className="rounded-lg bg-neon px-3 py-1.5 text-[12px] font-medium text-ink hover:bg-neon-dim"
           >
             Confirm
@@ -240,7 +275,7 @@ function AlertCard({
           {card.confirmPrompt.no && (
             <button
               type="button"
-              onClick={() => onPrompt(card.confirmPrompt!.no!)}
+              onClick={() => onPrompt?.(card.confirmPrompt!.no!)}
               className="rounded-lg border border-dark-border px-3 py-1.5 text-[12px] text-muted hover:text-white"
             >
               Cancel
@@ -255,9 +290,11 @@ function AlertCard({
 function AssistantCardView({
   card,
   onPrompt,
+  onConfirm,
 }: {
   card: AssistantCard;
   onPrompt?: (text: string) => void;
+  onConfirm?: (token: string) => void;
 }) {
   switch (card.type) {
     case "stats":
@@ -269,7 +306,7 @@ function AssistantCardView({
     case "affiliate_list":
       return <AffiliateListCard card={card} />;
     case "alert":
-      return <AlertCard card={card} onPrompt={onPrompt} />;
+      return <AlertCard card={card} onPrompt={onPrompt} onConfirm={onConfirm} />;
     default:
       return null;
   }
@@ -279,10 +316,12 @@ export function AssistantMessageBody({
   content,
   cards,
   onPrompt,
+  onConfirm,
 }: {
   content: string;
   cards?: AssistantCard[];
   onPrompt?: (text: string) => void;
+  onConfirm?: (token: string) => void;
 }) {
   const hasCards = cards && cards.length > 0;
 
@@ -296,7 +335,12 @@ export function AssistantMessageBody({
       {hasCards && (
         <div className="space-y-2">
           {cards.map((card, i) => (
-            <AssistantCardView key={`${card.type}-${i}`} card={card} onPrompt={onPrompt} />
+            <AssistantCardView
+              key={`${card.type}-${i}`}
+              card={card}
+              onPrompt={onPrompt}
+              onConfirm={onConfirm}
+            />
           ))}
         </div>
       )}

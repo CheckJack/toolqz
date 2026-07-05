@@ -17,6 +17,8 @@ import { saveAgentToolDraft } from "./create-tool";
 import type { AgentChatResult, AgentExecutionContext, AgentToolName } from "./definitions";
 import { researchToolDraft } from "./tool-research";
 import { assertAgentToolAccess } from "./tool-access";
+import { needsConfirmationWithToken } from "./confirm-flow";
+import { assertResearchRateLimit } from "./rate-limit";
 import { executeExtendedAgentTool, EXTENDED_AGENT_TOOLS } from "./run-tools-extended";
 
 const toolInclude = {
@@ -79,11 +81,13 @@ async function findAffiliate(args: Record<string, unknown>) {
 }
 
 function needsConfirmation(
+  userId: string,
+  tool: AgentToolName,
+  args: Record<string, unknown>,
   confirm: unknown,
   preview: Record<string, unknown>
-): { needsConfirmation: true } & Record<string, unknown> | null {
-  if (confirm === true) return null;
-  return { needsConfirmation: true, ...preview };
+) {
+  return needsConfirmationWithToken(userId, tool, args, confirm, preview);
 }
 
 export async function executeAgentTool(
@@ -92,6 +96,7 @@ export async function executeAgentTool(
   ctx: AgentExecutionContext
 ): Promise<{ result: unknown; links?: AgentChatResult["links"]; cards?: AssistantCard[] }> {
   assertAgentToolAccess(name, ctx.role);
+  assertResearchRateLimit(ctx.userId, name);
 
   if (EXTENDED_AGENT_TOOLS.has(name)) {
     return executeExtendedAgentTool(name, args, ctx);
@@ -123,6 +128,11 @@ export async function executeAgentTool(
     const search = typeof args.search === "string" ? args.search.trim() : "";
     const category = typeof args.category === "string" ? args.category.trim() : "";
     const published = typeof args.published === "boolean" ? args.published : undefined;
+    const listingType =
+      typeof args.listing_type === "string" && args.listing_type.trim()
+        ? args.listing_type.trim().toUpperCase()
+        : undefined;
+    const featured = typeof args.featured === "boolean" ? args.featured : undefined;
     const limit = Math.min(30, Math.max(1, Number(args.limit) || 15));
 
     const where = {
@@ -137,12 +147,24 @@ export async function executeAgentTool(
         : {}),
       ...(category ? { category } : {}),
       ...(published === true ? { published: true } : published === false ? { published: false } : {}),
+      ...(listingType === "AFFILIATE" || listingType === "EDITORIAL"
+        ? { listingType }
+        : {}),
+      ...(featured === true ? { featured: true } : featured === false ? { featured: false } : {}),
     };
 
     const [items, total, categories] = await Promise.all([
       prisma.tool.findMany({
         where,
-        select: { id: true, name: true, slug: true, category: true, published: true, featured: true },
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          category: true,
+          published: true,
+          featured: true,
+          listingType: true,
+        },
         orderBy: { name: "asc" },
         take: limit,
       }),
@@ -157,6 +179,7 @@ export async function executeAgentTool(
       slug: t.slug,
       category: label(t.category),
       published: t.published,
+      listingType: t.listingType,
       editUrl: `/admin/tools/${t.id}`,
     }));
 
@@ -252,6 +275,7 @@ export async function executeAgentTool(
           published: tool.published,
           featured: tool.featured,
           affiliateUrl: tool.affiliateUrl,
+          listingType: tool.listingType,
         }),
       } as Parameters<typeof prisma.tool.update>[0]["data"],
       include: toolInclude,
@@ -269,6 +293,53 @@ export async function executeAgentTool(
     };
   }
 
+  if (name === "set_tool_listing_type") {
+    const tool = await findTool(args);
+    if (!tool) {
+      throw new Error("Tool not found — provide tool_slug, tool_name, or tool_id");
+    }
+
+    const listingTypeRaw = String(args.listing_type ?? "").trim().toUpperCase();
+    if (listingTypeRaw !== "AFFILIATE" && listingTypeRaw !== "EDITORIAL") {
+      throw new Error("listing_type must be AFFILIATE or EDITORIAL");
+    }
+
+    const affiliateUrl =
+      typeof args.affiliate_url === "string" ? args.affiliate_url.trim() : "";
+    if (listingTypeRaw === "AFFILIATE" && !affiliateUrl && !tool.affiliateUrl) {
+      throw new Error("AFFILIATE tools need an affiliate_url (tracking link)");
+    }
+
+    const updated = await prisma.tool.update({
+      where: { id: tool.id },
+      data: {
+        listingType: listingTypeRaw,
+        affiliateUrl:
+          listingTypeRaw === "EDITORIAL"
+            ? null
+            : affiliateUrl || tool.affiliateUrl,
+      },
+      include: toolInclude,
+    });
+
+    await logAudit(
+      "update",
+      "tool",
+      `Set "${updated.name}" listing type to ${listingTypeRaw} via assistant`,
+      { userId, entityId: updated.id }
+    );
+
+    const serialized = serializeTool(updated);
+    return {
+      result: {
+        success: true,
+        name: serialized.name,
+        listingType: listingTypeRaw,
+      },
+      links: [{ label: serialized.name, href: `/admin/tools/${updated.id}` }],
+    };
+  }
+
   if (name === "publish_tool") {
     const tool = await findTool(args);
     if (!tool) {
@@ -277,7 +348,7 @@ export async function executeAgentTool(
 
     const published = args.published !== false;
     const action = published ? "publish" : "unpublish";
-    const preview = needsConfirmation(args.confirm, {
+    const preview = needsConfirmation(userId, "publish_tool", args, args.confirm, {
       action,
       tool: { id: tool.id, name: tool.name, slug: tool.slug, currentlyPublished: tool.published },
       message: published
@@ -287,7 +358,7 @@ export async function executeAgentTool(
     if (preview) {
       return {
         result: preview,
-        cards: [cardFromConfirmation(preview)],
+        cards: [cardFromConfirmation(preview, preview.confirmationToken)],
       };
     }
 
@@ -328,7 +399,7 @@ export async function executeAgentTool(
       throw new Error("Tool not found — provide tool_slug, tool_name, or tool_id");
     }
 
-    const preview = needsConfirmation(args.confirm, {
+    const preview = needsConfirmation(userId, "delete_tool", args, args.confirm, {
       action: "delete",
       tool: {
         id: tool.id,
@@ -342,7 +413,7 @@ export async function executeAgentTool(
     if (preview) {
       return {
         result: preview,
-        cards: [cardFromConfirmation(preview)],
+        cards: [cardFromConfirmation(preview, preview.confirmationToken)],
       };
     }
 

@@ -7,6 +7,7 @@ import {
   Handshake,
   LayoutDashboard,
   Link2,
+  ListTodo,
   Mail,
   MessageSquare,
   ScrollText,
@@ -35,7 +36,10 @@ export interface AdminNavGroup {
 export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   {
     label: "Overview",
-    items: [{ href: "/admin", label: "Dashboard", icon: LayoutDashboard }],
+    items: [
+      { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
+      { href: "/admin/tasks", label: "Tasks", icon: ListTodo },
+    ],
   },
   {
     label: "Insights",
@@ -84,6 +88,7 @@ export interface AdminPageMeta {
 
 const PAGE_META: { match: (path: string) => boolean; meta: AdminPageMeta }[] = [
   { match: (p) => p === "/admin", meta: { section: "Overview", title: "Dashboard" } },
+  { match: (p) => p.startsWith("/admin/tasks"), meta: { section: "Overview", title: "Tasks" } },
   { match: (p) => p.startsWith("/admin/analytics"), meta: { section: "Insights", title: "Analytics" } },
   { match: (p) => p === "/admin/tools/new", meta: { section: "Catalog", title: "New tool" } },
   { match: (p) => p.startsWith("/admin/tools/"), meta: { section: "Catalog", title: "Edit tool" } },
@@ -112,6 +117,7 @@ export function getAdminPageMeta(pathname: string): AdminPageMeta {
 
 export function isAdminNavActive(pathname: string, href: string): boolean {
   if (href === "/admin") return pathname === "/admin";
+  if (href === "/admin/tasks") return pathname.startsWith("/admin/tasks");
   if (href === "/admin/affiliate-directory") return pathname.startsWith("/admin/affiliate-directory");
   if (href === "/admin/affiliates") return pathname.startsWith("/admin/affiliates");
   if (href === "/admin/tools") return pathname.startsWith("/admin/tools");

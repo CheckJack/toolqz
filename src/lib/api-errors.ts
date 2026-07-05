@@ -17,10 +17,11 @@ export function handleAuthError(error: unknown, fallback = "Request failed") {
 export function handleApiError(error: unknown, fallback = "Request failed") {
   if (error instanceof Prisma.PrismaClientKnownRequestError) {
     if (error.code === "P2021") {
+      const table =
+        typeof error.meta?.table === "string" ? error.meta.table : "a required";
       return NextResponse.json(
         {
-          error:
-            "Database is missing the categories table. Run `npm run db:migrate` on the server (Prisma migrate deploy).",
+          error: `Database is missing the ${table} table. Run \`npm run db:migrate:prod\` on the server (or \`npm run db:migrate\` locally).`,
         },
         { status: 503 }
       );
