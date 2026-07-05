@@ -366,6 +366,7 @@ model AdminPlaybookSnippet {
   aliases     String?
   tags        String?
   pinned      Boolean  @default(false)
+  sensitive   Boolean  @default(false)
   sortOrder   Int      @default(0)
   createdById String?
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -374,5 +375,6 @@ model AdminPlaybookSnippet {
 
   @@index([category])
   @@index([pinned])
+  @@index([sensitive])
   @@index([sortOrder])
 }

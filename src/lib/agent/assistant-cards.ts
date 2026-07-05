@@ -341,6 +341,8 @@ export function cardsFromPlaybook(result: {
     question: string;
     answer: string;
     category: string;
+    sensitive?: boolean;
+    answerHidden?: boolean;
     matchReason?: string | null;
     score?: number | null;
   }[];
@@ -370,7 +372,11 @@ export function cardsFromPlaybook(result: {
         value: s.category.replace(/_/g, " "),
         hint: [
           s.matchReason,
-          s.answer.length > 90 ? `${s.answer.slice(0, 90)}…` : s.answer,
+          s.answerHidden
+            ? "Sensitive — reveal in Playbook"
+            : s.answer.length > 90
+              ? `${s.answer.slice(0, 90)}…`
+              : s.answer,
         ]
           .filter(Boolean)
           .join(" · "),
