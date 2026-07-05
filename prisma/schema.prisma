@@ -144,6 +144,7 @@ model AffiliateProgram {
   assignedTo       User?               @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
   activities       AffiliateActivity[]
   financeEntries   FinanceEntry[]
+  adminTasks         AdminTask[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
@@ -337,9 +338,11 @@ model AdminTask {
   priority     String    @default("MEDIUM")
   dueAt        DateTime?
   sortOrder    Int       @default(0)
-  linkUrl      String?
-  linkLabel    String?
-  assignedToId String?
+  linkUrl            String?
+  linkLabel          String?
+  affiliateProgramId String?
+  affiliateProgram   AffiliateProgram? @relation(fields: [affiliateProgramId], references: [id], onDelete: SetNull)
+  assignedToId       String?
   assignedTo   User?     @relation("AssignedTasks", fields: [assignedToId], references: [id], onDelete: SetNull)
   createdById  String?
   createdBy    User?     @relation("CreatedTasks", fields: [createdById], references: [id], onDelete: SetNull)
@@ -351,4 +354,5 @@ model AdminTask {
   @@index([assignedToId])
   @@index([dueAt])
   @@index([status])
+  @@index([affiliateProgramId])
 }

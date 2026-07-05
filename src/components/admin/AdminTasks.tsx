@@ -22,7 +22,15 @@ import {
   type TaskSection,
   type TaskStatus,
 } from "@/constants/admin-tasks";
-import { isTaskOverdue } from "@/lib/admin-tasks";
+import {
+  AFFILIATE_SIGNUP_OUTCOME_STATUSES,
+  extractAffiliateSignupCompanyName,
+  isAffiliateSignupTask,
+  isTaskOverdue,
+  pickAffiliateProgramId,
+  resolveAffiliateProgramId,
+  type AffiliateSignupOutcomeStatus,
+} from "@/lib/admin-tasks";
 import { SessionUser } from "@/lib/auth";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminRowActionsMenu } from "@/components/admin/AdminRowActionsMenu";
@@ -44,6 +52,7 @@ interface AdminTask {
   dueAt: string | null;
   linkUrl: string | null;
   linkLabel: string | null;
+  affiliateProgramId: string | null;
   assignedToId: string | null;
   assignedTo: { id: string; name: string } | null;
   createdBy: { id: string; name: string } | null;
@@ -100,6 +109,24 @@ function formatDueDate(iso: string | null) {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function TaskQuickLink({ href, label }: { href: string; label: string }) {
+  const className = "mt-1 inline-flex items-center gap-1 text-[11px] text-neon hover:underline";
+  if (href.startsWith("http://") || href.startsWith("https://")) {
+    return (
+      <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
+        <ExternalLink className="h-3 w-3" />
+        {label}
+      </a>
+    );
+  }
+  return (
+    <Link href={href} className={className}>
+      <ExternalLink className="h-3 w-3" />
+      {label}
+    </Link>
+  );
 }
 
 function defaultSection(sectionFilter: TaskSection | ""): TaskSection {
@@ -204,7 +231,9 @@ function TaskListRow({
   expanded,
   onToggleExpand,
   onPatch,
+  onStatusChange,
   onDelete,
+  statusBusy = false,
   colSpan = 7,
 }: {
   task: AdminTask;
@@ -215,7 +244,9 @@ function TaskListRow({
   expanded: boolean;
   onToggleExpand: () => void;
   onPatch: (id: string, payload: Record<string, unknown>) => Promise<void>;
+  onStatusChange: (task: AdminTask, status: TaskStatus) => void;
   onDelete: (id: string) => void;
+  statusBusy?: boolean;
   colSpan?: number;
 }) {
   const [titleDraft, setTitleDraft] = useState(task.title);
@@ -281,7 +312,8 @@ function TaskListRow({
             <input
               type="checkbox"
               checked={done}
-              onChange={() => void onPatch(task.id, { status: done ? "TODO" : "DONE" })}
+              disabled={statusBusy}
+              onChange={() => void onStatusChange(task, done ? "TODO" : "DONE")}
               className="mt-1.5 h-4 w-4 shrink-0 rounded border-dark-border bg-dark accent-neon"
               aria-label={done ? "Mark not done" : "Mark done"}
             />
@@ -309,13 +341,10 @@ function TaskListRow({
                 <p className="mt-0.5 line-clamp-1 pl-0 text-[11px] text-muted">{task.description}</p>
               )}
               {!expanded && task.linkUrl && (
-                <Link
+                <TaskQuickLink
                   href={task.linkUrl}
-                  className="mt-1 inline-flex items-center gap-1 text-[11px] text-neon hover:underline"
-                >
-                  <ExternalLink className="h-3 w-3" />
-                  {task.linkLabel || "Open link"}
-                </Link>
+                  label={task.linkLabel || "Open link"}
+                />
               )}
               {showSectionColumn && (
                 <p className="mt-1 text-[11px] text-muted md:hidden">{sectionLabel}</p>
@@ -341,7 +370,7 @@ function TaskListRow({
         <td>
           <select
             value={task.status}
-            onChange={(e) => void onPatch(task.id, { status: e.target.value })}
+            onChange={(e) => onStatusChange(task, e.target.value as TaskStatus)}
             className={`${inlineCellSelectClass} ${STATUS_COLORS[task.status]}`}
           >
             {TASK_STATUSES.map((s) => (
@@ -469,12 +498,16 @@ function TaskCard({
   task,
   isAdmin,
   onPatch,
+  onStatusChange,
   onDelete,
+  statusBusy = false,
 }: {
   task: AdminTask;
   isAdmin: boolean;
   onPatch: (id: string, payload: Record<string, unknown>) => Promise<void>;
+  onStatusChange: (task: AdminTask, status: TaskStatus) => void;
   onDelete: (id: string) => void;
+  statusBusy?: boolean;
 }) {
   const overdue = isTaskOverdue(task.dueAt, task.status);
   const dueLabel = formatDueDate(task.dueAt);
@@ -489,8 +522,9 @@ function TaskCard({
         <input
           type="checkbox"
           checked={task.status === "DONE"}
+          disabled={statusBusy}
           onChange={() =>
-            void onPatch(task.id, { status: task.status === "DONE" ? "TODO" : "DONE" })
+            void onStatusChange(task, task.status === "DONE" ? "TODO" : "DONE")
           }
           className="mt-0.5 h-4 w-4 shrink-0 rounded border-dark-border bg-dark accent-neon"
         />
@@ -537,7 +571,7 @@ function TaskCard({
         <span className="text-[10px] uppercase tracking-wide text-muted-dim">{sectionLabel}</span>
         <select
           value={task.status}
-          onChange={(e) => void onPatch(task.id, { status: e.target.value })}
+          onChange={(e) => onStatusChange(task, e.target.value as TaskStatus)}
           className={`${inlineCellSelectClass} ${STATUS_COLORS[task.status]}`}
         >
           {TASK_STATUSES.map((s) => (
@@ -565,13 +599,10 @@ function TaskCard({
       </div>
 
       {task.linkUrl && (
-        <Link
+        <TaskQuickLink
           href={task.linkUrl}
-          className="mt-2 inline-flex items-center gap-1 pl-6 text-xs text-neon hover:underline"
-        >
-          <ExternalLink className="h-3 w-3" />
-          {task.linkLabel || "Open link"}
-        </Link>
+          label={task.linkLabel || "Open link"}
+        />
       )}
     </article>
   );
@@ -591,6 +622,14 @@ export function AdminTasks({ user }: { user: SessionUser }) {
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+  const [affiliateDonePrompt, setAffiliateDonePrompt] = useState<{
+    task: AdminTask;
+    affiliateProgramId: string;
+  } | null>(null);
+  const [affiliateOutcomeStatus, setAffiliateOutcomeStatus] =
+    useState<AffiliateSignupOutcomeStatus>("ACTIVE");
+  const [affiliateDoneSaving, setAffiliateDoneSaving] = useState(false);
+  const [affiliateResolving, setAffiliateResolving] = useState(false);
   const listAddRef = useRef<HTMLInputElement | null>(null);
 
   const showSectionColumn = !section;
@@ -715,6 +754,122 @@ export function AdminTasks({ user }: { user: SessionUser }) {
     },
     [team, user.id, user.name, mergeTask, load, toast]
   );
+
+  const lookupAffiliateProgramId = useCallback(async (task: AdminTask): Promise<string | null> => {
+    const direct = resolveAffiliateProgramId(task);
+    if (direct) return direct;
+
+    const companyName = extractAffiliateSignupCompanyName(task.title);
+    if (!companyName) return null;
+
+    const res = await fetch(
+      `/api/admin/affiliates?search=${encodeURIComponent(companyName)}&pageSize=100`
+    );
+    if (!res.ok) return null;
+
+    const data = (await res.json().catch(() => ({}))) as {
+      items?: { id: string; companyName: string; assignedToId: string | null }[];
+    };
+    return pickAffiliateProgramId(data.items ?? [], companyName, task.assignedToId);
+  }, []);
+
+  const handleStatusChange = useCallback(
+    async (task: AdminTask, newStatus: TaskStatus) => {
+      if (newStatus === "DONE" && task.status !== "DONE" && isAffiliateSignupTask(task)) {
+        setAffiliateResolving(true);
+        try {
+          const affiliateProgramId = await lookupAffiliateProgramId(task);
+          if (affiliateProgramId) {
+            if (!task.affiliateProgramId) {
+              void fetch(`/api/admin/tasks/${task.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ affiliateProgramId }),
+              }).then((res) => {
+                if (res.ok) {
+                  setTasks((prev) =>
+                    prev.map((t) => (t.id === task.id ? { ...t, affiliateProgramId } : t))
+                  );
+                }
+              });
+            }
+            setAffiliateOutcomeStatus("ACTIVE");
+            setAffiliateDonePrompt({
+              task: { ...task, affiliateProgramId },
+              affiliateProgramId,
+            });
+            return;
+          }
+          toast("Could not find the linked affiliate program in CRM", "error");
+        } finally {
+          setAffiliateResolving(false);
+        }
+        return;
+      }
+      void patchTask(task.id, { status: newStatus });
+    },
+    [lookupAffiliateProgramId, patchTask, toast]
+  );
+
+  const completeAffiliateSignupTask = useCallback(async () => {
+    if (!affiliateDonePrompt) return;
+
+    const { task, affiliateProgramId } = affiliateDonePrompt;
+    setAffiliateDoneSaving(true);
+
+    try {
+      if (affiliateOutcomeStatus === "ACTIVE") {
+        const affRes = await fetch(`/api/admin/affiliates/${affiliateProgramId}`);
+        if (affRes.ok) {
+          const program = (await affRes.json()) as { companyName: string; affiliateUrl?: string | null };
+          if (!program.affiliateUrl) {
+            const ok = confirm(
+              `Set "${program.companyName}" to Active without an affiliate tracking URL? You can add the URL on the detail page.`
+            );
+            if (!ok) return;
+          }
+        }
+      }
+
+      const [taskRes, affiliateRes] = await Promise.all([
+        fetch(`/api/admin/tasks/${task.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "DONE" }),
+        }),
+        fetch(`/api/admin/affiliates/${affiliateProgramId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: affiliateOutcomeStatus }),
+        }),
+      ]);
+
+      const taskData = await taskRes.json().catch(() => ({}));
+      const affiliateData = await affiliateRes.json().catch(() => ({}));
+
+      if (!taskRes.ok) {
+        throw new Error(
+          typeof taskData.error === "string" ? taskData.error : "Failed to mark task done"
+        );
+      }
+      if (!affiliateRes.ok) {
+        throw new Error(
+          typeof affiliateData.error === "string"
+            ? affiliateData.error
+            : "Failed to update affiliate status"
+        );
+      }
+
+      mergeTask(taskData.task as AdminTask);
+      setAffiliateDonePrompt(null);
+      toast("Task completed and affiliate CRM updated", "success");
+      void load();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Failed to complete task", "error");
+    } finally {
+      setAffiliateDoneSaving(false);
+    }
+  }, [affiliateDonePrompt, affiliateOutcomeStatus, mergeTask, load, toast]);
 
   const handleInlineCreated = useCallback(
     (task: AdminTask) => {
@@ -896,7 +1051,9 @@ export function AdminTasks({ user }: { user: SessionUser }) {
                     expanded={expandedIds.has(task.id)}
                     onToggleExpand={() => toggleExpanded(task.id)}
                     onPatch={patchTask}
+                    onStatusChange={handleStatusChange}
                     onDelete={deleteTask}
+                    statusBusy={affiliateResolving}
                     colSpan={tableColSpan}
                   />
                 ))}
@@ -933,7 +1090,9 @@ export function AdminTasks({ user }: { user: SessionUser }) {
                       task={task}
                       isAdmin={isAdmin}
                       onPatch={patchTask}
+                      onStatusChange={handleStatusChange}
                       onDelete={deleteTask}
+                      statusBusy={affiliateResolving}
                     />
                   ))}
                   <div className="mt-auto flex items-center gap-2 rounded-lg border border-dashed border-dark-border px-2 py-1.5">
@@ -953,6 +1112,64 @@ export function AdminTasks({ user }: { user: SessionUser }) {
           </div>
         )}
       </div>
+
+      {affiliateDonePrompt && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => !affiliateDoneSaving && setAffiliateDonePrompt(null)}
+        >
+          <div
+            className="admin-card w-full max-w-md admin-card-pad"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal
+            aria-labelledby="affiliate-signup-done-title"
+          >
+            <h3 id="affiliate-signup-done-title" className="admin-section-title">
+              Update affiliate status
+            </h3>
+            <p className="mt-2 text-sm text-muted">
+              Marking <span className="text-white">{affiliateDonePrompt.task.title}</span> as done.
+              What is the affiliate program status?
+            </p>
+            <label className="mt-4 block text-xs font-medium uppercase tracking-wide text-muted-dim">
+              CRM status
+            </label>
+            <select
+              value={affiliateOutcomeStatus}
+              onChange={(e) =>
+                setAffiliateOutcomeStatus(e.target.value as AffiliateSignupOutcomeStatus)
+              }
+              className={`${inputClass} mt-1.5`}
+              disabled={affiliateDoneSaving}
+            >
+              {AFFILIATE_SIGNUP_OUTCOME_STATUSES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <div className="mt-6 flex gap-2">
+              <button
+                type="button"
+                onClick={() => void completeAffiliateSignupTask()}
+                disabled={affiliateDoneSaving}
+                className="admin-btn-primary disabled:opacity-50"
+              >
+                {affiliateDoneSaving ? "Saving…" : "Complete task"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAffiliateDonePrompt(null)}
+                disabled={affiliateDoneSaving}
+                className="admin-toolbar-btn disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
