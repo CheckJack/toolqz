@@ -1,7 +1,7 @@
-/** TOOLQZ transactional email shell — fixed dark theme (ignores device dark/light mode). */
+/** TOOLQZ transactional email shell — light outer background, dark content card. */
 
 const COLORS = {
-  page: "#1a1a1a",
+  page: "#ffffff",
   header: "#272727",
   card: "#303030",
   border: "#3d3d3d",
@@ -92,6 +92,7 @@ export function wrapEmailHtml(options: {
     a { color: ${COLORS.accent}; }
     @media (prefers-color-scheme: dark) {
       .email-page { background-color: ${COLORS.page} !important; }
+      .email-shell { border-color: ${COLORS.border} !important; }
       .email-header { background-color: ${COLORS.header} !important; }
       .email-card { background-color: ${COLORS.card} !important; }
       .email-text { color: ${COLORS.text} !important; }
@@ -110,9 +111,9 @@ export function wrapEmailHtml(options: {
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="email-page" bgcolor="${COLORS.page}" style="background-color:${COLORS.page};">
     <tr>
       <td align="center" style="padding:32px 16px;">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" class="email-shell" style="max-width:560px;border-radius:12px;overflow:hidden;border:1px solid ${COLORS.border};">
           <tr>
-            <td class="email-header" bgcolor="${COLORS.header}" style="background-color:${COLORS.header};border:1px solid ${COLORS.border};border-bottom:none;border-radius:12px 12px 0 0;padding:20px 24px;">
+            <td class="email-header" bgcolor="${COLORS.header}" style="background-color:${COLORS.header};border-bottom:1px solid ${COLORS.border};padding:20px 24px;">
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 <tr>
                   <td align="left" valign="middle">
@@ -128,7 +129,7 @@ export function wrapEmailHtml(options: {
             </td>
           </tr>
           <tr>
-            <td class="email-card" bgcolor="${COLORS.card}" style="background-color:${COLORS.card};border:1px solid ${COLORS.border};border-top:none;border-radius:0 0 12px 12px;padding:28px 24px 24px;">
+            <td class="email-card" bgcolor="${COLORS.card}" style="background-color:${COLORS.card};padding:28px 24px 24px;">
               ${options.bodyHtml}
               ${emailDivider()}
               <p class="email-footer" style="margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:12px;line-height:1.5;color:${COLORS.footer};">

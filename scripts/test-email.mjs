@@ -21,10 +21,17 @@ if (existsSync(envPath)) {
 }
 
 const to = process.argv[2] ?? "tc@toolqz.com";
-const { brandedEmailPreview } = await import("../src/lib/email-templates.ts");
+const template = process.argv[3] ?? "password-reset";
+
+const { adminPasswordResetEmail, brandedEmailPreview } = await import(
+  "../src/lib/email-templates.ts"
+);
 const { sendEmail } = await import("../src/lib/email.ts");
 
-const mail = brandedEmailPreview();
+const mail =
+  template === "preview"
+    ? brandedEmailPreview()
+    : adminPasswordResetEmail("Tiago", "test-preview-token-not-valid");
 const result = await sendEmail({
   to,
   toName: "Tiago",
