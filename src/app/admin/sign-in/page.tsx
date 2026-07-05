@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { AdminAuthShell } from "@/components/admin/AdminAuthShell";
+import { AdminLoginFields } from "@/components/admin/AdminLoginFields";
 import { ADMIN_FORGOT_PASSWORD_PATH } from "@/lib/auth-routes";
 
 export const dynamic = "force-dynamic";
