@@ -15,7 +15,7 @@ export function AdminAssistantWidget({ user }: { user: SessionUser }) {
   if (pathname === "/admin/agent") return null;
 
   return (
-    <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
+    <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2 pb-[max(0px,env(safe-area-inset-bottom))] pr-[max(0px,env(safe-area-inset-right))]">
       {/* Keep chat mounted when closed so history and drafts are preserved */}
       <div
         className={`flex flex-col overflow-hidden rounded-xl border border-dark-border bg-dark-elevated shadow-2xl shadow-black/40 max-sm:fixed max-sm:inset-x-2 max-sm:bottom-[4.5rem] max-sm:top-16 max-sm:h-auto max-sm:max-h-none max-sm:w-auto sm:h-[min(540px,calc(100vh-6rem))] sm:w-[min(400px,calc(100vw-2rem))] ${
@@ -64,7 +64,7 @@ export function AdminAssistantWidget({ user }: { user: SessionUser }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex h-12 w-12 items-center justify-center rounded-xl border border-dark-border bg-dark-elevated text-muted shadow-lg shadow-black/30 transition hover:border-border-hover hover:text-white"
+        className={`flex h-12 w-12 items-center justify-center rounded-xl border border-dark-border bg-dark-elevated text-muted shadow-lg shadow-black/30 transition hover:border-border-hover hover:text-white touch-manipulation`}
         aria-label={open ? "Close assistant" : "Open assistant"}
         title="Assistant"
       >

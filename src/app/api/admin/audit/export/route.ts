@@ -6,14 +6,27 @@ import { toCsv } from "@/lib/affiliates";
 
 const MAX_EXPORT = 5000;
 
+function searchWhere(search: string) {
+  if (!search) return {};
+  return {
+    OR: [
+      { detail: { contains: search } },
+      { user: { name: { contains: search } } },
+      { user: { email: { contains: search } } },
+    ],
+  };
+}
+
 export async function GET(request: NextRequest) {
   try {
     await requireAdmin();
     const { searchParams } = request.nextUrl;
+    const search = searchParams.get("search")?.trim() ?? "";
     const action = searchParams.get("action");
     const entity = searchParams.get("entity");
 
     const where = {
+      ...searchWhere(search),
       ...(action ? { action } : {}),
       ...(entity ? { entity } : {}),
     };

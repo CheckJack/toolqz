@@ -7,27 +7,21 @@ import { isValidEmail, normalizeEmail } from "@/lib/subscribers";
 
 const DEFAULT_PAGE_SIZE = 25;
 
+function searchWhere(search: string) {
+  if (!search) return {};
+  return {
+    OR: [{ email: { contains: search } }, { name: { contains: search } }],
+  };
+}
+
 function buildWhere(searchParams: URLSearchParams) {
   const search = searchParams.get("search")?.trim() ?? "";
   const status = searchParams.get("status")?.trim() ?? "";
 
-  const where: {
-    status?: string;
-    OR?: Array<{ email: { contains: string } } | { name: { contains: string } }>;
-  } = {};
-
-  if (status && status !== "ALL") {
-    where.status = status;
-  }
-
-  if (search) {
-    where.OR = [
-      { email: { contains: search } },
-      { name: { contains: search } },
-    ];
-  }
-
-  return where;
+  return {
+    ...searchWhere(search),
+    ...(status && status !== "ALL" ? { status } : {}),
+  };
 }
 
 export async function GET(request: NextRequest) {
@@ -39,9 +33,11 @@ export async function GET(request: NextRequest) {
       100,
       Math.max(1, Number(searchParams.get("pageSize") ?? DEFAULT_PAGE_SIZE))
     );
+    const search = searchParams.get("search")?.trim() ?? "";
+    const baseWhere = searchWhere(search);
     const where = buildWhere(searchParams);
 
-    const [items, total, activeCount] = await Promise.all([
+    const [items, total, allCount, activeCount, unsubscribedCount] = await Promise.all([
       prisma.newsletterSubscriber.findMany({
         where,
         orderBy: { subscribedAt: "desc" },
@@ -49,7 +45,9 @@ export async function GET(request: NextRequest) {
         take: pageSize,
       }),
       prisma.newsletterSubscriber.count({ where }),
-      prisma.newsletterSubscriber.count({ where: { status: "ACTIVE" } }),
+      prisma.newsletterSubscriber.count({ where: baseWhere }),
+      prisma.newsletterSubscriber.count({ where: { ...baseWhere, status: "ACTIVE" } }),
+      prisma.newsletterSubscriber.count({ where: { ...baseWhere, status: "UNSUBSCRIBED" } }),
     ]);
 
     return NextResponse.json({
@@ -59,6 +57,7 @@ export async function GET(request: NextRequest) {
       page,
       pageSize,
       totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      counts: { all: allCount, ACTIVE: activeCount, UNSUBSCRIBED: unsubscribedCount },
     });
   } catch (error) {
     return handleAuthError(error, "Failed to load subscribers");

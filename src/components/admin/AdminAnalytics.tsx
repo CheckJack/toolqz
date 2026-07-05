@@ -2,10 +2,15 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ExternalLink, MoreVertical, Pencil, Search } from "lucide-react";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
-import { MiniSparkline } from "@/components/admin/MiniSparkline";
+import { AdminChartCard } from "@/components/admin/charts/AdminChartCard";
+import { DailyAreaChart } from "@/components/admin/charts/DailyAreaChart";
+import { DonutBreakdownChart } from "@/components/admin/charts/DonutBreakdownChart";
+import { HorizontalBarChart } from "@/components/admin/charts/HorizontalBarChart";
 import { useToast } from "@/components/admin/Toast";
+import { CHART, toDailyChartRows, toRankChartRows } from "@/lib/admin-charts";
 
 interface ToolRow {
   toolId: string;
@@ -32,11 +37,14 @@ interface Analytics {
 }
 
 const RANGES = [
-  { value: "7d", label: "Last 7 days" },
-  { value: "30d", label: "Last 30 days" },
-  { value: "90d", label: "Last 90 days" },
+  { value: "7d", label: "7 days" },
+  { value: "30d", label: "30 days" },
+  { value: "90d", label: "90 days" },
   { value: "all", label: "All time" },
 ] as const;
+
+type RangeValue = (typeof RANGES)[number]["value"];
+type ToolView = "all" | "with" | "zero";
 
 export function AdminAnalytics() {
   const router = useRouter();
@@ -45,15 +53,28 @@ export function AdminAnalytics() {
   const [data, setData] = useState<Analytics | null>(null);
   const initialRange = searchParams.get("range");
   const toolFilter = searchParams.get("tool") ?? "";
-  const [range, setRange] = useState(
-    initialRange && RANGES.some((r) => r.value === initialRange) ? initialRange : "30d"
+  const [range, setRange] = useState<RangeValue>(
+    initialRange && RANGES.some((r) => r.value === initialRange)
+      ? (initialRange as RangeValue)
+      : "30d"
   );
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<"clicks" | "name">("clicks");
-  const [zeroClicksOnly, setZeroClicksOnly] = useState(false);
+  const [toolView, setToolView] = useState<ToolView>("all");
+  const [searchInput, setSearchInput] = useState("");
+
+  function syncRange(value: RangeValue) {
+    setRange(value);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "clicks");
+    if (value === "30d") params.delete("range");
+    else params.set("range", value);
+    router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
+  }
 
   function loadAnalytics() {
-    setData(null);
+    setLoading(true);
     setError("");
     const params = new URLSearchParams({ range });
     if (toolFilter) params.set("tool", toolFilter);
@@ -63,12 +84,20 @@ export function AdminAnalytics() {
         return r.json();
       })
       .then(setData)
-      .catch(() => setError("Failed to load analytics"));
+      .catch(() => setError("Failed to load analytics"))
+      .finally(() => setLoading(false));
   }
 
   useEffect(() => {
     loadAnalytics();
   }, [range, toolFilter]);
+
+  function clearToolFilter() {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", "clicks");
+    params.delete("tool");
+    router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
+  }
 
   function exportReferrers() {
     if (!data?.referrers.length) return;
@@ -83,6 +112,27 @@ export function AdminAnalytics() {
     URL.revokeObjectURL(url);
     toast("Referrers exported");
   }
+
+  const sortedTools = useMemo(() => {
+    if (!data) return [];
+    const q = searchInput.trim().toLowerCase();
+    return [...data.allTools]
+      .filter((t) => !toolFilter || t.slug === toolFilter)
+      .filter((t) => {
+        if (toolView === "with") return t.clicks > 0;
+        if (toolView === "zero") return t.clicks === 0;
+        return true;
+      })
+      .filter(
+        (t) =>
+          !q ||
+          t.name.toLowerCase().includes(q) ||
+          t.slug.toLowerCase().includes(q)
+      )
+      .sort((a, b) =>
+        sortBy === "name" ? a.name.localeCompare(b.name) : b.clicks - a.clicks
+      );
+  }, [data, toolView, searchInput, sortBy, toolFilter]);
 
   function exportCsv() {
     if (!data) return;
@@ -103,34 +153,31 @@ export function AdminAnalytics() {
     toast("CSV exported");
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <div className="rounded-2xl border border-red-500/30 p-6 text-center text-red-400">
         {error}
-        <button onClick={loadAnalytics} className="mt-2 block w-full text-sm text-neon">
+        <button type="button" onClick={loadAnalytics} className="admin-link-accent mt-2">
           Retry
         </button>
       </div>
     );
   }
 
-  if (!data) return <AdminSkeleton rows={6} />;
+  if (loading && !data) return <AdminSkeleton rows={6} />;
 
-  const maxDaily = Math.max(...data.dailyClicks.map((d) => Number(d.count)), 1);
+  if (!data) return null;
+
   const totalForShare = data.rangeClicks || data.totalClicks;
-
-  const sortedTools = [...data.allTools]
-    .filter((t) => !zeroClicksOnly || t.clicks === 0)
-    .filter((t) => !toolFilter || t.slug === toolFilter || t.name.toLowerCase().includes(toolFilter.toLowerCase()))
-    .sort((a, b) =>
-      sortBy === "name" ? a.name.localeCompare(b.name) : b.clicks - a.clicks
-    );
-
-  const filteredTool = toolFilter
-    ? data.allTools.find((t) => t.slug === toolFilter)
-    : null;
-
+  const filteredTool = toolFilter ? data.allTools.find((t) => t.slug === toolFilter) : null;
   const rangeLabel = RANGES.find((r) => r.value === range)?.label ?? "In range";
+
+  const toolCounts = {
+    all: data.allTools.length,
+    with: data.allTools.filter((t) => t.clicks > 0).length,
+    zero: data.allTools.filter((t) => t.clicks === 0).length,
+  };
+
   const statCards =
     range === "30d"
       ? [
@@ -142,50 +189,51 @@ export function AdminAnalytics() {
       : [
           { key: "range", label: rangeLabel, value: data.rangeClicks },
           { key: "all-time", label: "All-time total", value: data.totalClicks },
-          { key: "with-clicks", label: "Tools with clicks", value: data.allTools.filter((t) => t.clicks > 0).length },
-          { key: "zero-clicks", label: "Zero-click tools", value: data.allTools.filter((t) => t.clicks === 0).length },
+          {
+            key: "with-clicks",
+            label: "Tools with clicks",
+            value: toolCounts.with,
+          },
+          { key: "zero-clicks", label: "Zero-click tools", value: toolCounts.zero },
         ];
 
+  const dailyChart = toDailyChartRows(data.dailyClicks);
+  const topToolsChart = toRankChartRows(
+    sortedTools.map((tool) => ({ name: tool.name, value: tool.clicks })),
+    8
+  );
+  const referrersChart = toRankChartRows(
+    data.referrers.map((r) => ({ name: r.referrer, value: r.count })),
+    8
+  );
+  const clickTypeDonut = [
+    { name: "Affiliate URLs", value: data.affiliateClicks, color: CHART.primary },
+    { name: "Direct URLs", value: data.nonAffiliateClicks, color: CHART.muted },
+  ];
+
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Click Analytics</h1>
-          <p className="text-muted">
-            {filteredTool
-              ? `Filtered to ${filteredTool.name} · clear filter below`
-              : "Deep dive into Visit link performance"}
-          </p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="admin-segmented w-fit max-w-full overflow-x-auto">
+          {RANGES.map((r) => (
+            <button
+              key={r.value}
+              type="button"
+              onClick={() => syncRange(r.value)}
+              className={`admin-segmented-btn whitespace-nowrap ${
+                range === r.value ? "admin-segmented-btn-active" : ""
+              }`}
+            >
+              {r.label}
+            </button>
+          ))}
         </div>
         <div className="flex flex-wrap gap-2">
-          <select
-            value={range}
-            onChange={(e) => {
-              const v = e.target.value;
-              setRange(v);
-              const params = new URLSearchParams(searchParams.toString());
-              params.set("tab", "clicks");
-              if (v === "30d") params.delete("range");
-              else params.set("range", v);
-              router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
-            }}
-            className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white"
-          >
-            {RANGES.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
-          <button
-            onClick={exportCsv}
-            className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted hover:text-white"
-          >
+          <button type="button" onClick={exportCsv} className="admin-toolbar-btn">
             Export tools CSV
           </button>
           {data.referrers.length > 0 && (
-            <button
-              onClick={exportReferrers}
-              className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted hover:text-white"
-            >
+            <button type="button" onClick={exportReferrers} className="admin-toolbar-btn">
               Export referrers
             </button>
           )}
@@ -193,181 +241,286 @@ export function AdminAnalytics() {
       </div>
 
       {toolFilter && (
-        <div className="flex flex-wrap items-center gap-4 rounded-xl border border-neon/20 bg-neon/5 px-4 py-3 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <span>
-              Showing: <strong>{filteredTool?.name ?? toolFilter}</strong>
-              {filteredTool && (
-                <span className="text-muted">
-                  {" "}
-                  · {filteredTool.clicks} click{filteredTool.clicks === 1 ? "" : "s"} in range
-                </span>
-              )}
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                const params = new URLSearchParams(searchParams.toString());
-                params.set("tab", "clicks");
-                params.delete("tool");
-                router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
-              }}
-              className="text-neon hover:underline"
-            >
+        <div className="admin-card flex flex-col gap-4 border-neon/20 bg-neon/5 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+          <div className="min-w-0 text-sm">
+            <span className="text-muted">Filtered to </span>
+            <span className="font-medium text-white">{filteredTool?.name ?? toolFilter}</span>
+            {filteredTool && (
+              <span className="text-muted">
+                {" "}
+                · {filteredTool.clicks} click{filteredTool.clicks === 1 ? "" : "s"} in range
+              </span>
+            )}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            {data.toolDailyClicks && data.toolDailyClicks.length > 0 && (
+              <div className="min-w-[12rem] flex-1 sm:max-w-xs">
+                <DailyAreaChart
+                  data={toDailyChartRows(data.toolDailyClicks)}
+                  valueLabel="Clicks"
+                  height={100}
+                  emptyMessage="No clicks in range"
+                />
+              </div>
+            )}
+            <button type="button" onClick={clearToolFilter} className="admin-link-accent text-sm">
               Clear filter
             </button>
           </div>
-          {data.toolDailyClicks && (
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-muted">Daily trend</span>
-              <MiniSparkline data={data.toolDailyClicks} />
-            </div>
-          )}
         </div>
       )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat) => (
-          <div key={stat.key} className="rounded-2xl border border-dark-border bg-dark-elevated p-5">
-            <p className="text-sm text-muted">{stat.label}</p>
-            <p className="mt-1 text-3xl font-bold text-neon">{stat.value}</p>
+          <div key={stat.key} className="admin-card admin-card-pad">
+            <p className="admin-stat-label">{stat.label}</p>
+            <p className="admin-stat-value text-neon">{stat.value.toLocaleString()}</p>
           </div>
         ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <AdminChartCard
+          title="Affiliate vs direct clicks"
+          description="Share of outbound clicks in the selected range"
+        >
+          <DonutBreakdownChart data={clickTypeDonut} valueLabel="Clicks" height={240} />
+        </AdminChartCard>
+
+        {data.referrers.length > 0 ? (
+          <AdminChartCard
+            title="Top referrers"
+            description="Where visitors came from before clicking Visit"
+          >
+            <HorizontalBarChart data={referrersChart} valueLabel="Clicks" height={240} />
+          </AdminChartCard>
+        ) : (
+          <AdminChartCard title="Top referrers" description="No referrer data in this range">
+            <p className="py-12 text-center text-sm text-muted">No referrer data yet.</p>
+          </AdminChartCard>
+        )}
+      </div>
+
+      <AdminChartCard
+        title="Clicks per day"
+        description={
+          data.range === "all"
+            ? "All-time daily outbound clicks"
+            : `Daily clicks · ${rangeLabel.toLowerCase()}`
+        }
+      >
+        <DailyAreaChart
+          data={dailyChart}
+          valueLabel="Clicks"
+          emptyMessage="No click data yet."
+          height={280}
+        />
+      </AdminChartCard>
+
+      <AdminChartCard title="Top tools in range" description="Hover bars for exact click counts">
+        <HorizontalBarChart
+          data={topToolsChart}
+          valueLabel="Clicks"
+          emptyMessage="No tool clicks in this range."
+          height={Math.max(240, topToolsChart.length * 36 + 48)}
+        />
+      </AdminChartCard>
+
+      <div className="admin-card overflow-hidden">
+        <div className="flex flex-col gap-4 border-b border-dark-border p-4 sm:p-5">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="admin-segmented w-fit max-w-full overflow-x-auto">
+              {(
+                [
+                  { value: "all", label: "All tools" },
+                  { value: "with", label: "With clicks" },
+                  { value: "zero", label: "Zero clicks" },
+                ] as const
+              ).map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setToolView(tab.value)}
+                  className={`admin-segmented-btn whitespace-nowrap ${
+                    toolView === tab.value ? "admin-segmented-btn-active" : ""
+                  }`}
+                >
+                  {tab.label}
+                  <span className="ml-1.5 tabular-nums opacity-70">
+                    {toolCounts[tab.value]}
+                  </span>
+                </button>
+              ))}
+            </div>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as "clicks" | "name")}
+              className="rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:w-auto"
+            >
+              <option value="clicks">Sort by clicks</option>
+              <option value="name">Sort by name</option>
+            </select>
+          </div>
+
+          <div className="relative min-w-0">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-dim"
+              strokeWidth={1.75}
+            />
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search tools…"
+              className="w-full rounded-lg border border-dark-border bg-dark py-2 pl-9 pr-3 text-sm text-white placeholder:text-muted-dim focus:border-neon/40 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="p-4 sm:p-5">
+            <AdminSkeleton rows={5} />
+          </div>
+        ) : sortedTools.length === 0 ? (
+          <div className="px-4 py-16 text-center sm:px-5">
+            <p className="text-sm text-muted">No tools match your filters.</p>
+            {(searchInput || toolView !== "all") && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchInput("");
+                  setToolView("all");
+                }}
+                className="admin-link-accent mt-3"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="admin-table min-w-[640px]">
+              <thead>
+                <tr>
+                  <th>Tool</th>
+                  <th className="text-right">Clicks</th>
+                  <th className="hidden sm:table-cell text-right">Share</th>
+                  <th className="w-12" aria-label="Actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {sortedTools.map((tool) => (
+                  <tr
+                    key={tool.toolId}
+                    className={toolFilter && tool.slug === toolFilter ? "bg-neon/5" : ""}
+                  >
+                    <td className="min-w-[12rem]">
+                      <p className="font-medium text-white">{tool.name}</p>
+                      <p className="font-mono text-[11px] text-muted-dim">/{tool.slug}</p>
+                      <div className="mt-1 flex flex-wrap gap-x-2 gap-y-0.5 text-[11px]">
+                        {!tool.published && <span className="text-muted">Draft</span>}
+                        {!tool.hasAffiliateUrl && tool.published && (
+                          <span className="text-amber-400">No affiliate URL</span>
+                        )}
+                        <span className="text-muted sm:hidden">
+                          {totalForShare > 0
+                            ? `${((tool.clicks / totalForShare) * 100).toFixed(1)}%`
+                            : "0%"}
+                        </span>
+                      </div>
+                    </td>
+                    <td className="text-right font-semibold tabular-nums text-neon">
+                      {tool.clicks.toLocaleString()}
+                    </td>
+                    <td className="hidden text-right tabular-nums text-muted sm:table-cell">
+                      {totalForShare > 0
+                        ? `${((tool.clicks / totalForShare) * 100).toFixed(1)}%`
+                        : "0%"}
+                    </td>
+                    <td className="w-12 text-right">
+                      <AnalyticsToolRowActions tool={tool} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <p className="text-xs text-muted">
         Affiliate vs direct click totals are summed per tool in the selected range.
       </p>
+    </div>
+  );
+}
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl border border-dark-border bg-dark-elevated p-5">
-          <p className="text-sm text-muted">Clicks via affiliate URLs</p>
-          <p className="mt-1 text-2xl font-bold text-neon">{data.affiliateClicks}</p>
-        </div>
-        <div className="rounded-2xl border border-dark-border bg-dark-elevated p-5">
-          <p className="text-sm text-muted">Clicks via direct URLs</p>
-          <p className="mt-1 text-2xl font-bold">{data.nonAffiliateClicks}</p>
-        </div>
-      </div>
+function AnalyticsToolRowActions({ tool }: { tool: ToolRow }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
-      <div className="rounded-2xl border border-dark-border bg-dark-elevated p-6">
-        <h2 className="mb-6 font-semibold">
-          Clicks per day
-          {data.range === "all"
-            ? " (all time)"
-            : data.range === "7d"
-              ? " (last 7 days)"
-              : data.range === "90d"
-                ? " (last 90 days)"
-                : " (last 30 days)"}
-        </h2>
-        {data.dailyClicks.length === 0 ? (
-          <p className="text-sm text-muted">No click data yet.</p>
-        ) : (
-          <div className="flex h-40 items-end gap-1.5">
-            {data.dailyClicks.map((day) => {
-              const count = Number(day.count);
-              const height = (count / maxDaily) * 100;
-              return (
-                <div key={day.date} className="group flex flex-1 flex-col items-center gap-1" title={`${day.date}: ${count}`}>
-                  <div className="w-full rounded-t bg-neon/80 group-hover:bg-neon" style={{ height: `${Math.max(height, 4)}%` }} />
-                  <span className="hidden text-[10px] text-muted sm:block">{day.date.slice(5)}</span>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+  useEffect(() => {
+    if (!open) return;
 
-      {data.referrers.length > 0 && (
-        <div className="rounded-2xl border border-dark-border bg-dark-elevated p-6">
-          <h2 className="mb-4 font-semibold">Top referrers</h2>
-          <ul className="space-y-2 text-sm">
-            {data.referrers.map((r) => (
-              <li key={r.referrer} className="flex justify-between">
-                <span className="truncate text-muted">{r.referrer}</span>
-                <span className="font-semibold text-neon">{r.count}</span>
-              </li>
-            ))}
-          </ul>
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    function onPointerDown(event: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mousedown", onPointerDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative inline-flex justify-end">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="admin-icon-btn h-8 w-8"
+        aria-label={`Actions for ${tool.name}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[10.5rem] py-1"
+        >
+          <Link
+            href={`/admin/tools/${tool.toolId}`}
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="admin-menu-item"
+          >
+            <Pencil className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+            Edit tool
+          </Link>
+          {tool.published && (
+            <Link
+              href={`/tools/${tool.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="admin-menu-item"
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+              View on site
+            </Link>
+          )}
         </div>
       )}
-
-      <div className="overflow-hidden rounded-2xl border border-dark-border bg-dark-elevated">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-dark-border px-6 py-4">
-          <h2 className="font-semibold">
-            All tools ({sortedTools.length}
-            {zeroClicksOnly ? " zero-click" : ""})
-          </h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-2 text-sm text-muted">
-              <input
-                type="checkbox"
-                checked={zeroClicksOnly}
-                onChange={(e) => setZeroClicksOnly(e.target.checked)}
-              />
-              Zero clicks only
-            </label>
-            <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as "clicks" | "name")}
-            className="rounded-lg border border-dark-border bg-dark px-2 py-1 text-sm text-white"
-          >
-            <option value="clicks">Sort by clicks</option>
-            <option value="name">Sort by name</option>
-          </select>
-          </div>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-dark-border text-left text-muted">
-                <th className="px-6 py-3 font-medium">Tool</th>
-                <th className="px-6 py-3 font-medium">Clicks</th>
-                <th className="px-6 py-3 font-medium">Share</th>
-                <th className="px-6 py-3 font-medium">Links</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedTools.map((tool) => (
-                <tr
-                  key={tool.toolId}
-                  className={`border-b border-dark-border/50 last:border-0 ${
-                    toolFilter && tool.slug === toolFilter ? "bg-neon/5" : ""
-                  }`}
-                >
-                  <td className="px-6 py-3">
-                    <div>{tool.name}</div>
-                    {!tool.hasAffiliateUrl && tool.published && (
-                      <span className="text-xs text-amber-400">No affiliate URL</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-3 font-semibold text-neon">{tool.clicks}</td>
-                  <td className="px-6 py-3 text-muted">
-                    {totalForShare > 0 ? `${((tool.clicks / totalForShare) * 100).toFixed(1)}%` : "0%"}
-                  </td>
-                  <td className="px-6 py-3">
-                    <Link href={`/admin/tools/${tool.toolId}`} className="text-neon hover:underline">
-                      Edit
-                    </Link>
-                    {tool.published && (
-                      <>
-                        {" · "}
-                        <Link href={`/tools/${tool.slug}`} target="_blank" className="text-muted hover:text-white">
-                          View
-                        </Link>
-                      </>
-                    )}
-                    {!tool.published && (
-                      <span className="text-xs text-muted"> · Draft</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
     </div>
   );
 }

@@ -24,7 +24,7 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get(SESSION_COOKIE)?.value;
 
-  if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
+  if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login") && pathname !== "/admin/reset-password") {
     if (!token || !(await isValidSession(token))) {
       const res = NextResponse.redirect(new URL("/admin/login", request.url));
       res.cookies.delete(SESSION_COOKIE);

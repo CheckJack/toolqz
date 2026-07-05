@@ -34,6 +34,43 @@ async function summaryForWhere(where: Record<string, unknown>) {
   return { earnings, expenses, balance: earnings - expenses };
 }
 
+async function getMonthlyTrend() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+
+  const entries = await prisma.financeEntry.findMany({
+    where: { occurredAt: { gte: start } },
+    select: { type: true, amount: true, occurredAt: true },
+    orderBy: { occurredAt: "asc" },
+  });
+
+  const buckets = new Map<string, { earnings: number; expenses: number }>();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth() + i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    buckets.set(key, { earnings: 0, expenses: 0 });
+  }
+
+  for (const entry of entries) {
+    const key = `${entry.occurredAt.getFullYear()}-${String(entry.occurredAt.getMonth() + 1).padStart(2, "0")}`;
+    const bucket = buckets.get(key);
+    if (!bucket) continue;
+    if (entry.type === "EARNING") bucket.earnings += entry.amount;
+    else bucket.expenses += entry.amount;
+  }
+
+  return [...buckets.entries()].map(([month, values]) => ({
+    month,
+    label: new Date(`${month}-01T12:00:00`).toLocaleDateString("en-US", {
+      month: "short",
+      year: "2-digit",
+    }),
+    earnings: Math.round(values.earnings * 100) / 100,
+    expenses: Math.round(values.expenses * 100) / 100,
+    net: Math.round((values.earnings - values.expenses) * 100) / 100,
+  }));
+}
+
 function serializeEntry(entry: {
   id: string;
   type: string;
@@ -62,17 +99,32 @@ export async function GET(request: NextRequest) {
     await requireSession();
     const { searchParams } = request.nextUrl;
     const type = searchParams.get("type");
+    const search = searchParams.get("search")?.trim() ?? "";
     const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
     const pageSize = Math.min(
       100,
       Math.max(1, Number(searchParams.get("pageSize") ?? DEFAULT_PAGE_SIZE))
     );
 
+    const baseWhere = {
+      ...(search
+        ? {
+            OR: [
+              { description: { contains: search } },
+              { source: { contains: search } },
+              { notes: { contains: search } },
+            ],
+          }
+        : {}),
+    };
+
     const where = {
+      ...baseWhere,
       ...(type && isFinanceType(type) ? { type } : {}),
     };
 
-    const [items, total, summary] = await Promise.all([
+    const [items, total, summary, monthlyTrend, allCount, earningCount, expenseCount] =
+      await Promise.all([
       prisma.financeEntry.findMany({
         where,
         include: entryInclude,
@@ -81,7 +133,11 @@ export async function GET(request: NextRequest) {
         take: pageSize,
       }),
       prisma.financeEntry.count({ where }),
-      summaryForWhere(where),
+      summaryForWhere({}),
+      getMonthlyTrend(),
+      prisma.financeEntry.count({ where: baseWhere }),
+      prisma.financeEntry.count({ where: { ...baseWhere, type: "EARNING" } }),
+      prisma.financeEntry.count({ where: { ...baseWhere, type: "EXPENSE" } }),
     ]);
 
     return NextResponse.json({
@@ -91,6 +147,8 @@ export async function GET(request: NextRequest) {
       pageSize,
       totalPages: Math.max(1, Math.ceil(total / pageSize)),
       summary,
+      monthlyTrend,
+      counts: { all: allCount, EARNING: earningCount, EXPENSE: expenseCount },
     });
   } catch (error) {
     console.error("GET /api/admin/finances:", error);
