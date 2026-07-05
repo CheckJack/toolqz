@@ -8,8 +8,8 @@ import { prisma } from "@/lib/db";
 export async function GET() {
   try {
     await requireSession();
-    const items = await listAdminCategories();
-    return NextResponse.json({ items });
+    const { items, writable } = await listAdminCategories();
+    return NextResponse.json({ items, writable });
   } catch (error) {
     return handleAuthError(error, "Failed to load categories");
   }

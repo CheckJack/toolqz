@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 
 export function handleAuthError(error: unknown, fallback = "Request failed") {
   if (error instanceof Error) {
@@ -9,5 +10,26 @@ export function handleAuthError(error: unknown, fallback = "Request failed") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
+  return handleApiError(error, fallback);
+}
+
+/** Maps Prisma/unknown errors to JSON responses (logs server-side). */
+export function handleApiError(error: unknown, fallback = "Request failed") {
+  if (error instanceof Prisma.PrismaClientKnownRequestError) {
+    if (error.code === "P2021") {
+      return NextResponse.json(
+        {
+          error:
+            "Database is missing the categories table. Run `npm run db:migrate` on the server (Prisma migrate deploy).",
+        },
+        { status: 503 }
+      );
+    }
+    if (error.code === "P2002") {
+      return NextResponse.json({ error: "A record with this value already exists." }, { status: 409 });
+    }
+  }
+
+  console.error(`[api] ${fallback}:`, error);
   return NextResponse.json({ error: fallback }, { status: 500 });
 }

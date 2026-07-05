@@ -125,28 +125,34 @@ export async function listAdminCategories() {
 
     const countBySlug = Object.fromEntries(toolCounts.map((row) => [row.category, row._count]));
 
-    return categories.map((category) => ({
-      ...category,
-      toolCount: countBySlug[category.slug] ?? 0,
-    }));
+    return {
+      items: categories.map((category) => ({
+        ...category,
+        toolCount: countBySlug[category.slug] ?? 0,
+      })),
+      writable: true,
+    };
   } catch {
     const toolCounts = await prisma.tool.groupBy({
       by: ["category"],
       _count: true,
     });
 
-    return toolCounts
-      .map((row) => ({
-        id: row.category,
-        slug: row.category,
-        label: getCategoryLabel(row.category),
-        description: null,
-        sortOrder: 0,
-        published: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        toolCount: row._count,
-      }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+    return {
+      writable: false,
+      items: toolCounts
+        .map((row) => ({
+          id: row.category,
+          slug: row.category,
+          label: getCategoryLabel(row.category),
+          description: null,
+          sortOrder: 0,
+          published: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          toolCount: row._count,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    };
   }
 }

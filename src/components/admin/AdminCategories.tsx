@@ -26,6 +26,7 @@ const emptyForm = {
 export function AdminCategories() {
   const { toast } = useToast();
   const [items, setItems] = useState<CategoryRow[]>([]);
+  const [writable, setWritable] = useState(true);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -39,7 +40,10 @@ export function AdminCategories() {
         if (!r.ok) throw new Error("Failed");
         return r.json();
       })
-      .then((data) => setItems(data.items ?? []))
+      .then((data) => {
+        setItems(data.items ?? []);
+        setWritable(data.writable !== false);
+      })
       .catch(() => toast("Failed to load categories", "error"))
       .finally(() => setLoading(false));
   }, [toast]);
@@ -138,6 +142,14 @@ export function AdminCategories() {
         </p>
       </div>
 
+      {!writable && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+          Categories are read-only until the database is updated. On the server, run{" "}
+          <code className="rounded bg-black/30 px-1 py-0.5 text-xs">npm run db:migrate</code> against
+          your production database, then redeploy if needed.
+        </div>
+      )}
+
       <form
         onSubmit={(e) => void saveCategory(e)}
         className="space-y-4 rounded-2xl border border-dark-border bg-dark-elevated p-6"
@@ -206,7 +218,7 @@ export function AdminCategories() {
         <div className="flex flex-wrap gap-2">
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || !writable}
             className="rounded-xl bg-neon px-4 py-2 text-sm font-semibold text-dark disabled:opacity-60"
           >
             {saving ? "Saving…" : editingId ? "Save changes" : "Create category"}
