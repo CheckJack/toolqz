@@ -6,6 +6,7 @@ import {
   getOrCreateConversation,
   otherParticipant,
 } from "@/lib/team-chat";
+import { notifyTeamMessage } from "@/lib/team-message-notify";
 
 async function unreadForConversation(
   conversationId: string,
@@ -191,6 +192,14 @@ export async function POST(request: NextRequest) {
     await prisma.teamConversation.update({
       where: { id: conversationId },
       data: { updatedAt: new Date() },
+    });
+
+    const recipientId = otherParticipant(conversation, session.id);
+    void notifyTeamMessage({
+      recipientId,
+      senderName: session.name,
+      body: text,
+      conversationId,
     });
 
     return NextResponse.json({ message, conversationId });

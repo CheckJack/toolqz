@@ -6,6 +6,7 @@ const TELEGRAM_NOTIFY_TYPES = new Set([
   "partner_inquiry",
   "tool_published",
   "affiliate_status",
+  "team_message",
 ]);
 
 export async function createNotification(input: {

@@ -205,6 +205,238 @@ export function followUpDigestEmail(
   };
 }
 
+export type TaskDigestItem = {
+  title: string;
+  section: string;
+  status: string;
+  priority: string;
+  dueLabel: string | null;
+  href: string | null;
+  overdue: boolean;
+};
+
+export function buildStatusEmail(input: {
+  name: string;
+  domain: string;
+  status: "running" | "completed" | "failed";
+  buildId: string;
+  createdAt?: string;
+}) {
+  const hostingUrl = `${appUrl()}/admin/hosting`;
+  const statusLabel =
+    input.status === "running"
+      ? "Build started"
+      : input.status === "completed"
+        ? "Build completed successfully"
+        : "Build failed";
+
+  const subject =
+    input.status === "running"
+      ? `TOOLQZ deploy started — ${input.domain}`
+      : input.status === "completed"
+        ? `TOOLQZ deploy succeeded — ${input.domain}`
+        : `TOOLQZ deploy failed — ${input.domain}`;
+
+  const text = [
+    `Hi ${input.name},`,
+    "",
+    statusLabel,
+    `Domain: ${input.domain}`,
+    `Build ID: ${input.buildId}`,
+    input.createdAt ? `Started: ${input.createdAt}` : "",
+    "",
+    `View deploy history: ${hostingUrl}`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const bodyHtml = [
+    emailParagraph(`Hi ${escapeHtml(input.name)},`),
+    emailParagraph(
+      `<strong style="color:#ffffff;">${escapeHtml(statusLabel)}</strong> for <strong style="color:#ffffff;">${escapeHtml(input.domain)}</strong>.`
+    ),
+    emailMutedParagraph(`Build ID: ${escapeHtml(input.buildId)}`),
+    input.createdAt
+      ? emailMutedParagraph(`Started: ${escapeHtml(input.createdAt)}`)
+      : "",
+    emailButton(hostingUrl, "View deploy history"),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = wrapEmailHtml({
+    title: statusLabel,
+    preheader: `${statusLabel} — ${input.domain}`,
+    bodyHtml,
+  });
+
+  return { subject, text, html };
+}
+
+export function taskDigestEmail(name: string, items: TaskDigestItem[]) {
+  const tasksUrl = `${appUrl()}/admin/tasks`;
+  const lines = items.map((item) => {
+    const due = item.dueLabel ? ` — due ${item.dueLabel}` : "";
+    const overdue = item.overdue ? " (overdue)" : "";
+    const link = item.href ? `\n  ${appUrl()}${item.href}` : "";
+    return `• [${item.priority}] ${item.title} (${item.section}, ${item.status})${due}${overdue}${link}`;
+  });
+
+  const text = [
+    `Hi ${name},`,
+    "",
+    items.length === 0
+      ? "You have no open tasks today. Nice work!"
+      : items.length === 1
+        ? "You have 1 open task:"
+        : `You have ${items.length} open tasks:`,
+    "",
+    ...lines,
+    "",
+    `Open tasks: ${tasksUrl}`,
+  ].join("\n");
+
+  const listHtml =
+    items.length === 0
+      ? emailParagraph("You have no open tasks today. Nice work!")
+      : `<ul style="margin:0 0 16px;padding-left:20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.55;">${items
+          .map((item) => {
+            const due = item.dueLabel
+              ? ` — due ${escapeHtml(item.dueLabel)}${item.overdue ? " <span style=\"color:#f87171;\">(overdue)</span>" : ""}`
+              : "";
+            const link = item.href
+              ? `<br /><a href="${appUrl()}${escapeHtml(item.href)}" style="color:#6db4e8;font-size:13px;">Open task</a>`
+              : "";
+            return `<li style="margin-bottom:12px;color:#ffffff;"><strong>${escapeHtml(item.title)}</strong> <span style="color:#9a9a9a;">(${escapeHtml(item.section)} · ${escapeHtml(item.status)} · ${escapeHtml(item.priority)})</span>${due}${link}</li>`;
+          })
+          .join("")}</ul>`;
+
+  const bodyHtml = [
+    emailParagraph(`Hi ${escapeHtml(name)},`),
+    emailParagraph(
+      items.length === 0
+        ? "Here&apos;s your daily task summary."
+        : items.length === 1
+          ? "You have <strong style=\"color:#ffffff;\">1 open task</strong> today:"
+          : `You have <strong style="color:#ffffff;">${items.length} open tasks</strong> today:`
+    ),
+    listHtml,
+    emailButton(tasksUrl, "Open tasks board"),
+  ].join("\n");
+
+  const html = wrapEmailHtml({
+    title: "Your daily tasks",
+    preheader:
+      items.length === 0
+        ? "No open tasks today"
+        : items.length === 1
+          ? "1 open task today"
+          : `${items.length} open tasks today`,
+    bodyHtml,
+  });
+
+  return {
+    subject:
+      items.length === 0
+        ? "TOOLQZ — no open tasks today"
+        : items.length === 1
+          ? "TOOLQZ — 1 task for today"
+          : `TOOLQZ — ${items.length} tasks for today`,
+    text,
+    html,
+  };
+}
+
+export function teamMessageEmail(input: {
+  recipientName: string;
+  senderName: string;
+  preview: string;
+}) {
+  const messagesUrl = `${appUrl()}/admin/messages`;
+  const preview =
+    input.preview.length > 280 ? `${input.preview.slice(0, 277)}…` : input.preview;
+
+  const text = [
+    `Hi ${input.recipientName},`,
+    "",
+    `${input.senderName} sent you a message on TOOLQZ:`,
+    "",
+    preview,
+    "",
+    `Read it: ${messagesUrl}`,
+  ].join("\n");
+
+  const bodyHtml = [
+    emailParagraph(`Hi ${escapeHtml(input.recipientName)},`),
+    emailParagraph(
+      `<strong style="color:#ffffff;">${escapeHtml(input.senderName)}</strong> sent you a message on TOOLQZ:`
+    ),
+    `<p style="margin:0 0 16px;padding:12px 14px;border-radius:8px;background:#252525;border:1px solid #3d3d3d;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;font-size:14px;line-height:1.55;color:#e5e5e5;">${escapeHtml(preview).replace(/\n/g, "<br />")}</p>`,
+    emailButton(messagesUrl, "Read message"),
+  ].join("\n");
+
+  const html = wrapEmailHtml({
+    title: "New team message",
+    preheader: `${input.senderName}: ${preview.slice(0, 80)}`,
+    bodyHtml,
+  });
+
+  return {
+    subject: `New message from ${input.senderName}`,
+    text,
+    html,
+  };
+}
+
+export function siteStatusEmail(input: {
+  name: string;
+  domain: string;
+  healthy: boolean;
+  statusCode: number;
+  detail?: string;
+}) {
+  const subject = input.healthy
+    ? `TOOLQZ is back online — ${input.domain}`
+    : `TOOLQZ may be down — ${input.domain}`;
+
+  const headline = input.healthy ? "Website recovered" : "Website health alert";
+  const text = [
+    `Hi ${input.name},`,
+    "",
+    headline,
+    `Domain: ${input.domain}`,
+    `HTTP status: ${input.statusCode || "unreachable"}`,
+    input.detail ? `Detail: ${input.detail}` : "",
+    "",
+    `Check hosting: ${appUrl()}/admin/hosting`,
+    `Health endpoint: ${appUrl()}/api/health`,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const bodyHtml = [
+    emailParagraph(`Hi ${escapeHtml(input.name)},`),
+    emailParagraph(
+      input.healthy
+        ? `<strong style="color:#ffffff;">${escapeHtml(input.domain)}</strong> is responding normally again.`
+        : `<strong style="color:#ffffff;">${escapeHtml(input.domain)}</strong> may be down or unhealthy. We couldn&apos;t get a healthy response.`
+    ),
+    emailMutedParagraph(`HTTP status: ${input.statusCode || "unreachable"}`),
+    input.detail ? emailMutedParagraph(escapeHtml(input.detail)) : "",
+    emailButton(`${appUrl()}/admin/hosting`, "Open hosting dashboard"),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const html = wrapEmailHtml({
+    title: headline,
+    preheader: subject,
+    bodyHtml,
+  });
+
+  return { subject, text, html };
+}
+
 /** Sample branded email for manual / script testing. */
 export function brandedEmailPreview() {
   const bodyHtml = [

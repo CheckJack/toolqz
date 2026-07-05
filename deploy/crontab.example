@@ -1,4 +1,15 @@
-# Daily follow-up cron (Hostinger VPS — no Vercel cron).
-# Replace YOUR_DOMAIN and YOUR_CRON_SECRET, then: crontab -e
+# TOOLQZ cron jobs (Hostinger — schedule via hPanel Cron Jobs or VPS crontab).
+# Replace YOUR_DOMAIN and YOUR_CRON_SECRET.
 #
+# Daily affiliate follow-ups (8:00 UTC)
 # 0 8 * * * curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://YOUR_DOMAIN/api/cron/follow-ups >/dev/null 2>&1
+#
+# Daily task digest — 9:00 Europe/Lisbon (Portugal)
+# CRON_TZ=Europe/Lisbon
+# 0 9 * * * curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://YOUR_DOMAIN/api/cron/daily-tasks >/dev/null 2>&1
+#
+# Build status monitor — every 5 minutes (deploy started / completed / failed)
+# */5 * * * * curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://YOUR_DOMAIN/api/cron/build-monitor >/dev/null 2>&1
+#
+# Uptime / site health — every 10 minutes (alerts when site goes down or recovers)
+# */10 * * * * curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://YOUR_DOMAIN/api/cron/uptime-check >/dev/null 2>&1
