@@ -130,7 +130,8 @@ export async function POST(request: NextRequest) {
       console.error("[admin/agent/chat] session save failed", error);
     }
 
-    const { lastTool: _lastTool, ...response } = result;
+    const { lastTool, ...response } = result;
+    void lastTool;
     return NextResponse.json({ ...response, sessionId });
   } catch (error) {
     if (error instanceof Error) {

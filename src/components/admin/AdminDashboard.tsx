@@ -91,6 +91,22 @@ export function AdminDashboard({ user }: { user: SessionUser }) {
     loadDashboard();
   }, []);
 
+  async function exportOverdueCsv() {
+    try {
+      const res = await fetch("/api/admin/affiliates/export?mine=true&followups=due");
+      if (!res.ok) throw new Error("Export failed");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `toolqz-overdue-followups-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Non-blocking export from dashboard banner
+    }
+  }
+
   if (loading && !data) return <AdminSkeleton rows={8} />;
 
   if (error) {
@@ -201,12 +217,13 @@ export function AdminDashboard({ user }: { user: SessionUser }) {
             <Link href="/admin/affiliates?mine=true&followups=due" className="admin-toolbar-btn">
               View mine
             </Link>
-            <a
-              href="/api/admin/affiliates/export?mine=true&followups=due"
+            <button
+              type="button"
+              onClick={() => void exportOverdueCsv()}
               className="admin-toolbar-btn"
             >
               Export CSV
-            </a>
+            </button>
           </div>
         </div>
       )}

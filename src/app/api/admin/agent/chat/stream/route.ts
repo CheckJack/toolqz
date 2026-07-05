@@ -96,7 +96,8 @@ export async function POST(request: NextRequest) {
             console.error("[admin/agent/chat/stream] session save failed", error);
           }
 
-          const { lastTool: _lastTool, ...payload } = result;
+          const { lastTool, ...payload } = result;
+          void lastTool;
           send({ type: "done", result: { ...payload, sessionId: sessionId ?? undefined } });
         } catch (error) {
           if (error instanceof DOMException && error.name === "AbortError") {
