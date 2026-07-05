@@ -919,86 +919,84 @@ export function AdminTasks({ user }: { user: SessionUser }) {
       />
 
       <div className="admin-card overflow-hidden">
-        <div className="flex flex-col gap-4 border-b border-dark-border p-4 sm:p-5">
-          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setSection("")}
-                className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                  section === ""
-                    ? "border-neon/50 bg-neon/10 text-neon"
-                    : "border-dark-border text-muted hover:border-border-hover hover:text-white"
-                }`}
-              >
-                All areas
-                {counts?.sections && (
-                  <span className="ml-1.5 text-muted-dim">
-                    {Object.values(counts.sections).reduce((a, b) => a + b, 0)}
-                  </span>
-                )}
-              </button>
-              {TASK_SECTIONS.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => setSection(s.value)}
-                  className={`rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-                    section === s.value
-                      ? "border-neon/50 bg-neon/10 text-neon"
-                      : "border-dark-border text-muted hover:border-border-hover hover:text-white"
-                  }`}
-                >
-                  {s.label}
-                  {counts?.sections?.[s.value] != null && (
-                    <span className="ml-1.5 text-muted-dim">{counts.sections[s.value]}</span>
-                  )}
-                </button>
-              ))}
-            </div>
-
-            <div className="admin-segmented w-fit shrink-0">
-              <button
-                type="button"
-                onClick={() => setView("list")}
-                className={`admin-segmented-btn inline-flex items-center gap-1.5 ${view === "list" ? "admin-segmented-btn-active" : ""}`}
-              >
-                <List className="h-3.5 w-3.5" strokeWidth={1.75} />
-                List
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("board")}
-                className={`admin-segmented-btn inline-flex items-center gap-1.5 ${view === "board" ? "admin-segmented-btn-active" : ""}`}
-              >
-                <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.75} />
-                Board
-              </button>
-            </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative min-w-[12rem] flex-1 sm:max-w-xs">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+        <div className="space-y-3 border-b border-dark-border px-4 py-3 sm:px-5 sm:py-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-dim"
+                strokeWidth={1.75}
+              />
               <input
                 type="search"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search tasks..."
-                className={`${inputClass} pl-9`}
+                placeholder="Search tasks…"
+                className="w-full rounded-lg border border-dark-border bg-dark py-2 pl-9 pr-3 text-sm text-white placeholder:text-muted-dim focus:border-neon/40 focus:outline-none"
               />
             </div>
-            <select
-              value={assigneeFilter}
-              onChange={(e) => setAssigneeFilter(e.target.value as AssigneeFilter)}
-              className={`${inputClass} w-auto min-w-[10rem]`}
+
+            <div className="flex items-center gap-2">
+              <select
+                value={assigneeFilter}
+                onChange={(e) => setAssigneeFilter(e.target.value as AssigneeFilter)}
+                className="min-w-0 flex-1 rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:min-w-[10.5rem] sm:flex-none"
+              >
+                {ASSIGNEE_FILTERS.map((f) => (
+                  <option key={f.value || "all"} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+
+              <div className="admin-segmented shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setView("list")}
+                  className={`admin-segmented-btn inline-flex items-center gap-1.5 ${view === "list" ? "admin-segmented-btn-active" : ""}`}
+                  aria-pressed={view === "list"}
+                >
+                  <List className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  <span className="hidden sm:inline">List</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("board")}
+                  className={`admin-segmented-btn inline-flex items-center gap-1.5 ${view === "board" ? "admin-segmented-btn-active" : ""}`}
+                  aria-pressed={view === "board"}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  <span className="hidden sm:inline">Board</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="admin-segmented max-w-full overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setSection("")}
+              className={`admin-segmented-btn whitespace-nowrap ${section === "" ? "admin-segmented-btn-active" : ""}`}
             >
-              {ASSIGNEE_FILTERS.map((f) => (
-                <option key={f.value || "all"} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
+              All areas
+              {counts?.sections && (
+                <span className="ml-1.5 tabular-nums opacity-70">
+                  {Object.values(counts.sections).reduce((a, b) => a + b, 0)}
+                </span>
+              )}
+            </button>
+            {TASK_SECTIONS.map((s) => (
+              <button
+                key={s.value}
+                type="button"
+                onClick={() => setSection(s.value)}
+                className={`admin-segmented-btn whitespace-nowrap ${section === s.value ? "admin-segmented-btn-active" : ""}`}
+              >
+                {s.label}
+                {counts?.sections?.[s.value] != null && (
+                  <span className="ml-1.5 tabular-nums opacity-70">{counts.sections[s.value]}</span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
 
