@@ -12,8 +12,8 @@ import { HeroSection } from "@/components/HeroSection";
 import { WebsiteGrid } from "@/components/WebsiteGrid";
 import { markHomepageVisited } from "@/lib/newsletter";
 import {
+  filterWebsitesBySearch,
   getCategoryCounts,
-  matchesSearch,
   SortOption,
   sortWebsites,
 } from "@/lib/homepage";
@@ -83,18 +83,27 @@ export function HomePage({ websites, categories }: HomePageProps) {
     syncUrl(searchQuery, activeCategory, sort);
   }, [searchQuery, activeCategory, sort, initialized, syncUrl]);
 
+  const categoryLabels = useMemo(
+    () =>
+      Object.fromEntries(
+        categories.filter((c) => c.id !== "all").map((c) => [c.id, c.label])
+      ),
+    [categories]
+  );
+
   const filteredWebsites = useMemo(() => {
     const query = searchQuery.trim();
 
-    const results = websites.filter((site) => {
-      const matchesCategory =
-        activeCategory === "all" || site.category === activeCategory;
-      const matchesQuery = !query || matchesSearch(site, query);
-      return matchesCategory && matchesQuery;
-    });
+    const byCategory = websites.filter(
+      (site) => activeCategory === "all" || site.category === activeCategory
+    );
 
-    return sortWebsites(results, sort);
-  }, [websites, searchQuery, activeCategory, sort]);
+    if (query) {
+      return filterWebsitesBySearch(byCategory, query, categoryLabels);
+    }
+
+    return sortWebsites(byCategory, sort);
+  }, [websites, searchQuery, activeCategory, sort, categoryLabels]);
 
   function handleClearAll() {
     setSearchQuery("");

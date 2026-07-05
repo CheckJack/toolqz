@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { History, MessageSquare, Square } from "lucide-react";
+import { Copy, History, MessageSquare, Square } from "lucide-react";
 import {
   AssistantChatHistory,
   type LoadedChatMessage,
@@ -527,17 +527,32 @@ export function AdminAssistantChat({
                   } opacity-0 transition group-hover:opacity-100`}
                 >
                   {msg.role === "user" && msg.id !== "welcome" && (
-                    <button type="button" onClick={() => editUserMessage(msg.id)} className="hover:underline">
-                      Edit
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void copyMessage(msg.id, msg.content)}
+                        className="inline-flex items-center gap-1 hover:underline"
+                        aria-label={copiedId === msg.id ? "Copied" : "Copy message"}
+                        title={copiedId === msg.id ? "Copied" : "Copy"}
+                      >
+                        <Copy className="h-3 w-3" strokeWidth={2} />
+                        {copiedId === msg.id ? "Copied" : "Copy"}
+                      </button>
+                      <button type="button" onClick={() => editUserMessage(msg.id)} className="hover:underline">
+                        Edit
+                      </button>
+                    </>
                   )}
                   {msg.role === "assistant" && msg.id !== "welcome" && (
                     <>
                       <button
                         type="button"
                         onClick={() => void copyMessage(msg.id, msg.content)}
-                        className="hover:text-neon"
+                        className="inline-flex items-center gap-1 hover:text-neon"
+                        aria-label={copiedId === msg.id ? "Copied" : "Copy message"}
+                        title={copiedId === msg.id ? "Copied" : "Copy"}
                       >
+                        <Copy className="h-3 w-3" strokeWidth={2} />
                         {copiedId === msg.id ? "Copied" : "Copy"}
                       </button>
                       <button type="button" onClick={() => speakText(msg.content)} className="hover:text-neon">
@@ -659,7 +674,7 @@ export function AdminAssistantChat({
                 : isListening
                   ? "Listening… tap mic when done, then Send"
                   : loading
-                    ? "Type to queue · Enter queues next message"
+                    ? "Type to queue"
                     : "Message Assistant"
             }
             className={`max-h-28 min-h-[2.5rem] flex-1 resize-none border-0 bg-transparent px-1 py-2.5 text-sm leading-5 text-white placeholder:text-muted focus:outline-none focus:ring-0 disabled:opacity-50 ${
