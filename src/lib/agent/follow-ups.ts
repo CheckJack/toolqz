@@ -64,6 +64,55 @@ export function buildFollowUpPrompts(
     ];
   }
 
+  if (lastTool === "create_affiliate" && toolResult.success) {
+    const name = String(toolResult.companyName ?? "affiliate");
+    return [
+      { label: "Open CRM", text: `Open affiliate ${name} in CRM` },
+      { label: "Create tool", text: `Create a tool from affiliate ${name}` },
+      { label: "Add task", text: `Create a task to follow up on ${name}` },
+    ];
+  }
+
+  if (lastTool === "update_blog_post" && toolResult.success) {
+    const title = String(toolResult.title ?? "post");
+    return [
+      { label: "Publish", text: `Publish blog post "${title}"` },
+      { label: "List posts", text: "List draft blog posts" },
+    ];
+  }
+
+  if (lastTool === "search_playbook") {
+    const top = (toolResult.snippets as { question?: string }[] | undefined)?.[0];
+    return [
+      { label: "Open Playbook", text: "Open the playbook page" },
+      {
+        label: "Add snippet",
+        text: top?.question
+          ? `Add a playbook snippet for: ${top.question}`
+          : "Create a playbook snippet: ",
+      },
+      { label: "Affiliate forms", text: "Search playbook for affiliate form answers about traffic" },
+    ];
+  }
+
+  if (lastTool === "create_playbook_snippet" && toolResult.success) {
+    const question = String(
+      (toolResult.snippet as { question?: string })?.question ?? "snippet"
+    );
+    return [
+      { label: "Search", text: `Search playbook for ${question}` },
+      { label: "Add another", text: "Create a playbook snippet: " },
+      { label: "Open Playbook", text: "Open the playbook page" },
+    ];
+  }
+
+  if (lastTool === "update_playbook_snippet" && toolResult.success) {
+    return [
+      { label: "Search playbook", text: "Search playbook for " },
+      { label: "Open Playbook", text: "Open the playbook page" },
+    ];
+  }
+
   if (lastTool === "get_tool_issues") {
     return [
       { label: "Partner gaps", text: "List AFFILIATE tools missing tracking URL" },

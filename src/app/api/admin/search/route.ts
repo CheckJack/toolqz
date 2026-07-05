@@ -12,6 +12,7 @@ const STATIC_PAGES = [
   { id: "page-crm", label: "Affiliate CRM", href: "/admin/affiliates" },
   { id: "page-finances", label: "Finances", href: "/admin/finances" },
   { id: "page-messages", label: "Messages", href: "/admin/messages" },
+  { id: "page-playbook", label: "Playbook", href: "/admin/playbook" },
   { id: "page-subscribers", label: "Mailing list", href: "/admin/subscribers" },
   { id: "page-team", label: "Team", href: "/admin/team" },
   { id: "page-add-tool", label: "Add new tool", href: "/admin/tools/new" },

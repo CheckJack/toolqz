@@ -11,7 +11,7 @@ export const ASSISTANT_CAPABILITIES = [
   },
   {
     title: "Affiliate CRM",
-    description: "Pipeline status, follow-ups, portal and tracking URLs.",
+    description: "Add programs, pipeline status, follow-ups, portal and tracking URLs.",
     prompt: "List affiliate programs without a tool",
   },
   {
@@ -21,13 +21,18 @@ export const ASSISTANT_CAPABILITIES = [
   },
   {
     title: "Content",
-    description: "Draft blog posts and manage categories.",
+    description: "Draft, edit, and publish blog posts; manage categories.",
     prompt: "List draft blog posts",
   },
   {
     title: "Tasks",
     description: "Create, list, and update team tasks on the Tasks board.",
     prompt: "List tasks assigned to me",
+  },
+  {
+    title: "Playbook",
+    description: "Search copy-paste answers for affiliate forms, emails, and company info.",
+    prompt: "Search playbook for why should you promote us",
   },
 ] as const;
 

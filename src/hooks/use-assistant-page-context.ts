@@ -42,6 +42,28 @@ export function useAssistantPageContext(pathname: string | null): string | undef
         }
       }
 
+      const blogMatch = pathname!.match(/^\/admin\/blog\/([^/]+)$/);
+      if (blogMatch) {
+        try {
+          const res = await fetch(`/api/admin/blog/${blogMatch[1]}`);
+          if (res.ok) {
+            const post = (await res.json()) as {
+              title?: string;
+              slug?: string;
+              published?: boolean;
+            };
+            if (!cancelled) {
+              setContext(
+                `User is editing blog post "${post.title ?? "unknown"}" (slug: ${post.slug}, ${post.published ? "published" : "draft"}) — use update_blog_post or publish_blog`
+              );
+            }
+            return;
+          }
+        } catch {
+          /* fall through */
+        }
+      }
+
       const affiliateMatch = pathname!.match(/^\/admin\/affiliates\/([^/]+)$/);
       if (affiliateMatch) {
         try {
@@ -86,11 +108,15 @@ export function useAssistantPageContext(pathname: string | null): string | undef
           "/admin/affiliates": "Affiliate CRM list",
           "/admin/affiliate-directory": "Affiliate directory (active partners)",
           "/admin/analytics": "Analytics",
-          "/admin/blog": "Blog list",
-          "/admin/finances": "Finances",
-          "/admin/tasks": "Tasks board — use list_tasks, create_task, update_task; inline list at /admin/tasks",
-          "/admin/subscribers": "Mailing list",
-          "/admin/categories": "Categories",
+          "/admin/blog": "Blog list — use list_blog_posts, create_blog_draft, update_blog_post",
+          "/admin/finances": "Finances — use create_finance_entry, list_finance_entries, get_finance_summary",
+          "/admin/tasks": "Tasks board — use list_tasks, create_task, update_task",
+          "/admin/playbook":
+            "Playbook — reusable Q&A for affiliate forms and emails; use search_playbook with natural language",
+          "/admin/subscribers": "Mailing list (read-only via assistant)",
+          "/admin/categories": "Categories — use list_categories, create_category",
+          "/admin/team": "Team page — use list_team_members for assignments",
+          "/admin/hosting": "Hosting & deploy status (view in UI; no assistant tool yet)",
           "/admin/agent": "Assistant full page",
         };
         setContext(labels[pathname!] ? `User is on ${labels[pathname!]}` : `User is on ${pathname}`);

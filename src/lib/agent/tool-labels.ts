@@ -13,11 +13,14 @@ const LABELS: Record<AgentToolName, string> = {
   create_blog_draft: "Writing blog draft…",
   list_blog_posts: "Loading blog posts…",
   publish_blog: "Updating blog publish status…",
+  update_blog_post: "Updating blog post…",
+  delete_blog_post: "Preparing blog delete…",
   publish_tool: "Updating publish status…",
   delete_tool: "Preparing delete…",
   list_affiliates: "Searching affiliate CRM…",
   list_affiliate_directory: "Loading affiliate directory…",
   update_affiliate: "Updating affiliate program…",
+  create_affiliate: "Creating affiliate program…",
   create_tool_from_affiliate: "Creating tool from affiliate…",
   get_analytics: "Loading analytics…",
   get_my_work: "Loading your work queue…",
@@ -30,7 +33,13 @@ const LABELS: Record<AgentToolName, string> = {
   delete_task: "Preparing task delete…",
   create_finance_entry: "Adding finance entry…",
   list_finance_entries: "Loading finance entries…",
+  update_finance_entry: "Updating finance entry…",
+  delete_finance_entry: "Preparing finance delete…",
   list_team_members: "Loading team…",
+  search_playbook: "Searching playbook…",
+  create_playbook_snippet: "Adding playbook snippet…",
+  update_playbook_snippet: "Updating playbook snippet…",
+  delete_playbook_snippet: "Preparing playbook delete…",
 };
 
 export function toolProgressLabel(tool: AgentToolName): string {

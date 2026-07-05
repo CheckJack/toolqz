@@ -1,3 +1,8 @@
+import {
+  createAffiliateForAgent,
+  findAffiliateForAgent,
+} from "./affiliate-agent";
+import { assertUniqueMatch } from "./entity-resolve";
 import { patchAffiliateWithActivity } from "@/lib/affiliate-db";
 import { assertCanPatchAffiliate } from "@/lib/affiliate-access";
 import { logAudit } from "@/lib/audit-log";
@@ -15,6 +20,7 @@ import {
   cardsFromFinance,
   cardsFromFinanceEntries,
   cardsFromMyWork,
+  cardsFromPlaybook,
   cardsFromSubscribers,
   cardsFromTasks,
   cardsFromTeamMembers,
@@ -29,6 +35,12 @@ import {
   listAdminTasksForAgent,
   updateAdminTaskForAgent,
 } from "./task-agent";
+import {
+  createPlaybookSnippetForAgent,
+  findPlaybookSnippet,
+  searchPlaybookForAgent,
+  updatePlaybookSnippetForAgent,
+} from "./playbook-agent";
 import { researchToolDraft } from "./tool-research";
 import { getToolIssuesSummary } from "./tool-issues";
 import type { AgentExecutionContext, AgentToolName } from "./definitions";
@@ -42,29 +54,18 @@ async function findTool(args: Record<string, unknown>) {
   if (id) return prisma.tool.findUnique({ where: { id } });
   if (slug) return prisma.tool.findUnique({ where: { slug } });
   if (name) {
-    return prisma.tool.findFirst({
+    const rows = await prisma.tool.findMany({
       where: { name: { contains: name } },
       orderBy: { name: "asc" },
+      take: 6,
     });
+    return assertUniqueMatch(rows, name, (r) => r.name, "tool");
   }
   return null;
 }
 
 async function findAffiliate(args: Record<string, unknown>) {
-  const id = typeof args.affiliate_id === "string" ? args.affiliate_id.trim() : "";
-  const companyName =
-    typeof args.company_name === "string" ? args.company_name.trim() : "";
-
-  if (id) {
-    return prisma.affiliateProgram.findUnique({ where: { id } });
-  }
-  if (companyName) {
-    return prisma.affiliateProgram.findFirst({
-      where: { companyName: { contains: companyName } },
-      orderBy: { companyName: "asc" },
-    });
-  }
-  return null;
+  return findAffiliateForAgent(args);
 }
 
 async function findBlog(args: Record<string, unknown>) {
@@ -75,10 +76,29 @@ async function findBlog(args: Record<string, unknown>) {
   if (id) return prisma.blogPost.findUnique({ where: { id } });
   if (slug) return prisma.blogPost.findUnique({ where: { slug } });
   if (title) {
-    return prisma.blogPost.findFirst({
+    const rows = await prisma.blogPost.findMany({
       where: { title: { contains: title } },
       orderBy: { updatedAt: "desc" },
+      take: 6,
     });
+    return assertUniqueMatch(rows, title, (r) => r.title, "blog post");
+  }
+  return null;
+}
+
+async function findFinanceEntry(args: Record<string, unknown>) {
+  const id = typeof args.entry_id === "string" ? args.entry_id.trim() : "";
+  const match =
+    typeof args.match_description === "string" ? args.match_description.trim() : "";
+
+  if (id) return prisma.financeEntry.findUnique({ where: { id } });
+  if (match) {
+    const rows = await prisma.financeEntry.findMany({
+      where: { description: { contains: match } },
+      orderBy: { occurredAt: "desc" },
+      take: 6,
+    });
+    return assertUniqueMatch(rows, match, (r) => r.description, "finance entry");
   }
   return null;
 }
@@ -323,6 +343,97 @@ export async function executeExtendedAgentTool(
     };
   }
 
+  if (name === "update_blog_post") {
+    const post = await findBlog(args);
+    if (!post) {
+      throw new Error("Blog post not found — provide post_id, post_slug, or post_title");
+    }
+
+    const patch: {
+      title?: string;
+      slug?: string;
+      excerpt?: string | null;
+      content?: string;
+      coverImage?: string | null;
+    } = {};
+
+    if (typeof args.title === "string" && args.title.trim()) patch.title = args.title.trim();
+    if (typeof args.slug === "string" && args.slug.trim()) patch.slug = args.slug.trim();
+    if (typeof args.excerpt === "string") patch.excerpt = args.excerpt.trim() || null;
+    if (typeof args.content === "string" && args.content.trim()) patch.content = args.content.trim();
+    if (typeof args.cover_image === "string") {
+      patch.coverImage = args.cover_image.trim() || null;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      throw new Error(
+        "Provide at least one field to update: title, slug, excerpt, content, or cover_image"
+      );
+    }
+
+    if (patch.slug && patch.slug !== post.slug) {
+      const conflict = await prisma.blogPost.findFirst({
+        where: { slug: patch.slug, NOT: { id: post.id } },
+      });
+      if (conflict) throw new Error(`Slug "${patch.slug}" is already in use`);
+    }
+
+    const data = buildBlogData({
+      title: patch.title ?? post.title,
+      slug: patch.slug ?? post.slug,
+      excerpt: patch.excerpt !== undefined ? (patch.excerpt ?? "") : (post.excerpt ?? ""),
+      content: patch.content ?? post.content,
+      coverImage: patch.coverImage !== undefined ? patch.coverImage : post.coverImage,
+      published: post.published,
+      authorId: post.authorId,
+      existingPublishedAt: post.publishedAt,
+    });
+
+    const updated = await prisma.blogPost.update({
+      where: { id: post.id },
+      data,
+      include: { author: { select: { name: true } } },
+    });
+
+    await logAudit("update", "blog_post", `Assistant updated "${updated.title}"`, {
+      userId: ctx.userId,
+      entityId: updated.id,
+    });
+
+    const serialized = serializeBlogPost(updated);
+    return {
+      result: { success: true, title: serialized.title, slug: serialized.slug, published: serialized.published },
+      links: [{ label: serialized.title, href: `/admin/blog/${updated.id}` }],
+    };
+  }
+
+  if (name === "delete_blog_post") {
+    const post = await findBlog(args);
+    if (!post) {
+      throw new Error("Blog post not found — provide post_id, post_slug, or post_title");
+    }
+
+    const preview = needsConfirmation(ctx.userId, "delete_blog_post", args, args.confirm, {
+      action: "delete",
+      post: { id: post.id, title: post.title, slug: post.slug },
+      message: `This permanently deletes the blog post "${post.title}".`,
+    });
+    if (preview) {
+      return { result: preview, cards: [cardFromConfirmation(preview, preview.confirmationToken)] };
+    }
+
+    await prisma.blogPost.delete({ where: { id: post.id } });
+    await logAudit("delete", "blog_post", `Assistant deleted "${post.title}"`, {
+      userId: ctx.userId,
+      entityId: post.id,
+    });
+
+    return {
+      result: { success: true, deleted: post.title },
+      links: [{ label: "Blog", href: "/admin/blog" }],
+    };
+  }
+
   if (name === "update_affiliate") {
     const affiliate = await findAffiliate(args);
     if (!affiliate) {
@@ -374,6 +485,18 @@ export async function executeExtendedAgentTool(
         nextFollowUpAt: updated.nextFollowUpAt?.toISOString().slice(0, 10) ?? null,
       },
       links: [{ label: updated.companyName, href: `/admin/affiliates/${updated.id}` }],
+    };
+  }
+
+  if (name === "create_affiliate") {
+    const affiliate = await createAffiliateForAgent(args, ctx.userId);
+    await logAudit("create", "affiliate", `Assistant created program "${affiliate.companyName}"`, {
+      userId: ctx.userId,
+      entityId: affiliate.id,
+    });
+    return {
+      result: { success: true, ...affiliate },
+      links: [{ label: affiliate.companyName, href: affiliate.editUrl }],
     };
   }
 
@@ -649,6 +772,108 @@ export async function executeExtendedAgentTool(
     };
   }
 
+  if (name === "update_finance_entry") {
+    const entry = await findFinanceEntry(args);
+    if (!entry) {
+      throw new Error("Finance entry not found — provide entry_id or match_description");
+    }
+
+    const data: {
+      type?: string;
+      amount?: number;
+      description?: string;
+      source?: string | null;
+      notes?: string | null;
+      occurredAt?: Date;
+    } = {};
+
+    if (args.type !== undefined) {
+      const type = typeof args.type === "string" ? args.type.trim().toUpperCase() : "";
+      if (!isFinanceType(type)) throw new Error("type must be EARNING or EXPENSE");
+      data.type = type;
+    }
+
+    if (args.amount !== undefined) {
+      const amount = parseFinanceAmount(args.amount);
+      if (amount === null) throw new Error("amount must be greater than zero");
+      data.amount = amount;
+    }
+
+    if (args.description !== undefined) {
+      const description = typeof args.description === "string" ? args.description.trim() : "";
+      if (!description) throw new Error("description cannot be empty");
+      data.description = description;
+    }
+
+    if (args.source !== undefined) {
+      data.source = typeof args.source === "string" ? args.source.trim() || null : null;
+    }
+
+    if (args.notes !== undefined) {
+      data.notes = typeof args.notes === "string" ? args.notes.trim() || null : null;
+    }
+
+    if (typeof args.occurred_at === "string" && args.occurred_at.trim()) {
+      const d = new Date(args.occurred_at.trim());
+      if (Number.isNaN(d.getTime())) throw new Error("Invalid occurred_at — use YYYY-MM-DD");
+      data.occurredAt = d;
+    }
+
+    if (Object.keys(data).length === 0) {
+      throw new Error(
+        "Provide at least one field: type, amount, description, source, notes, or occurred_at"
+      );
+    }
+
+    const updated = await prisma.financeEntry.update({
+      where: { id: entry.id },
+      data,
+    });
+
+    await logAudit("update", "finance", `Assistant updated finance entry "${updated.description}"`, {
+      userId: ctx.userId,
+      entityId: updated.id,
+    });
+
+    return {
+      result: {
+        success: true,
+        id: updated.id,
+        type: updated.type,
+        amount: updated.amount,
+        description: updated.description,
+      },
+      links: [{ label: "Finances", href: "/admin/finances" }],
+    };
+  }
+
+  if (name === "delete_finance_entry") {
+    const entry = await findFinanceEntry(args);
+    if (!entry) {
+      throw new Error("Finance entry not found — provide entry_id or match_description");
+    }
+
+    const preview = needsConfirmation(ctx.userId, "delete_finance_entry", args, args.confirm, {
+      action: "delete",
+      entry: { id: entry.id, description: entry.description, amount: entry.amount, type: entry.type },
+      message: `This permanently deletes the ${entry.type.toLowerCase()} "${entry.description}" (${entry.amount}).`,
+    });
+    if (preview) {
+      return { result: preview, cards: [cardFromConfirmation(preview, preview.confirmationToken)] };
+    }
+
+    await prisma.financeEntry.delete({ where: { id: entry.id } });
+    await logAudit("delete", "finance", `Assistant deleted "${entry.description}"`, {
+      userId: ctx.userId,
+      entityId: entry.id,
+    });
+
+    return {
+      result: { success: true, deleted: entry.description },
+      links: [{ label: "Finances", href: "/admin/finances" }],
+    };
+  }
+
   if (name === "list_team_members") {
     const search = typeof args.search === "string" ? args.search.trim() : "";
     const limit = Math.min(30, Math.max(1, Number(args.limit) || 15));
@@ -683,6 +908,69 @@ export async function executeExtendedAgentTool(
     };
   }
 
+  if (name === "search_playbook") {
+    const result = await searchPlaybookForAgent(args);
+    return {
+      result,
+      cards: cardsFromPlaybook(result),
+      links: [{ label: "Playbook", href: "/admin/playbook" }],
+    };
+  }
+
+  if (name === "create_playbook_snippet") {
+    const snippet = await createPlaybookSnippetForAgent(args, ctx.userId);
+    await logAudit("create", "playbook", `Assistant added playbook "${snippet.question}"`, {
+      userId: ctx.userId,
+      entityId: snippet.id,
+    });
+    return {
+      result: { success: true, snippet },
+      links: [{ label: snippet.question, href: "/admin/playbook" }],
+    };
+  }
+
+  if (name === "update_playbook_snippet") {
+    const snippet = await updatePlaybookSnippetForAgent(args);
+    await logAudit("update", "playbook", `Assistant updated playbook "${snippet.question}"`, {
+      userId: ctx.userId,
+      entityId: snippet.id,
+    });
+    return {
+      result: { success: true, snippet },
+      links: [{ label: snippet.question, href: "/admin/playbook" }],
+    };
+  }
+
+  if (name === "delete_playbook_snippet") {
+    const snippet = await findPlaybookSnippet(args);
+    if (!snippet) {
+      throw new Error("Playbook snippet not found — provide snippet_id or snippet_question");
+    }
+
+    const preview = needsConfirmation(ctx.userId, "delete_playbook_snippet", args, args.confirm, {
+      action: "delete",
+      tool: { name: snippet.question },
+      message: `This permanently deletes the playbook snippet "${snippet.question}".`,
+    });
+    if (preview) {
+      return {
+        result: preview,
+        cards: [cardFromConfirmation(preview, preview.confirmationToken)],
+      };
+    }
+
+    await prisma.adminPlaybookSnippet.delete({ where: { id: snippet.id } });
+    await logAudit("delete", "playbook", `Assistant deleted playbook "${snippet.question}"`, {
+      userId: ctx.userId,
+      entityId: snippet.id,
+    });
+
+    return {
+      result: { success: true, deleted: snippet.question },
+      links: [{ label: "Playbook", href: "/admin/playbook" }],
+    };
+  }
+
   throw new Error(`Unknown extended agent tool: ${name}`);
 }
 
@@ -694,7 +982,10 @@ export const EXTENDED_AGENT_TOOLS = new Set<AgentToolName>([
   "list_categories",
   "list_blog_posts",
   "publish_blog",
+  "update_blog_post",
+  "delete_blog_post",
   "update_affiliate",
+  "create_affiliate",
   "list_affiliate_directory",
   "get_finance_summary",
   "search_audit_log",
@@ -705,5 +996,11 @@ export const EXTENDED_AGENT_TOOLS = new Set<AgentToolName>([
   "delete_task",
   "create_finance_entry",
   "list_finance_entries",
+  "update_finance_entry",
+  "delete_finance_entry",
   "list_team_members",
+  "search_playbook",
+  "create_playbook_snippet",
+  "update_playbook_snippet",
+  "delete_playbook_snippet",
 ]);

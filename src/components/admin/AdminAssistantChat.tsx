@@ -43,7 +43,7 @@ const WELCOME: AssistantMessage = {
   id: "welcome",
   role: "assistant",
   content:
-    "Hi — I'm your TOOLQZ assistant. I can create tools from URLs, manage affiliates, tasks, finances, analytics, and publish or delete (with confirmation). Tap the mic or type below.",
+    "Hi — I'm your TOOLQZ assistant. I can create tools, manage affiliates and tasks, search the Playbook, handle finances, and more. If I need details to complete something, I'll ask. Tap the mic or type below.",
 };
 
 interface Props {
