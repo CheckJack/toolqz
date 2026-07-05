@@ -47,7 +47,7 @@ export function AdminLoginForm() {
   }
 
   return (
-    <AdminAuthShell title="Team admin login" subtitle="Sign in to manage TOOLQZ">
+    <AdminAuthShell subtitle="Sign in to manage TOOLQZ">
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <label className="mb-1.5 block text-sm text-muted">Email</label>

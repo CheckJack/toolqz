@@ -3,7 +3,7 @@ export function AdminAuthShell({
   subtitle,
   children,
 }: {
-  title: string;
+  title?: string;
   subtitle: string;
   children: React.ReactNode;
 }) {
@@ -14,8 +14,10 @@ export function AdminAuthShell({
           <h1 className="text-2xl font-bold">
             TOOL<span className="text-neon">QZ</span>
           </h1>
-          <p className="mt-2 text-sm font-medium text-white">{title}</p>
-          <p className="mt-1 text-sm text-muted">{subtitle}</p>
+          {title ? (
+            <p className="mt-2 text-sm font-medium text-white">{title}</p>
+          ) : null}
+          <p className={`text-sm text-muted ${title ? "mt-1" : "mt-2"}`}>{subtitle}</p>
         </div>
         {children}
       </div>
