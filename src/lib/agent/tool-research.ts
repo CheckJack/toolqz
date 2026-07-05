@@ -39,7 +39,7 @@ Rules:
 - howItWorks items need step (1-based), title, and description.
 - pricing items need label and price; note is optional.
 - faq items need question and answer.
-- logoUrl and screenshots must be full https URLs when possible (from og:image or obvious product images on the site). Use empty string or [] if unknown.
+- logoUrl and screenshots must be full https URLs when possible (from og:image or obvious product images on the site). Never use seeklogo.com or other logo CDN mirrors. Prefer the product site's favicon or og:image. Use empty string or [] if unknown.
 - slug: lowercase, hyphens, no special characters, max 60 chars.
 - rating: number 0-5, one decimal, fair and balanced.
 

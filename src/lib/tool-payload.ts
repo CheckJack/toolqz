@@ -1,4 +1,5 @@
 import type { Tool } from "@prisma/client";
+import { resolveToolLogoUrl, sanitizeLogoUrlForStorage } from "@/lib/logo-url";
 import type {
   FaqItem,
   HowItWorksStep,
@@ -40,8 +41,14 @@ export function buildToolData(body: Record<string, unknown>) {
   for (const key of scalars) {
     if (body[key] !== undefined) {
       data[key] =
-        key === "affiliateUrl" || key === "notForYouIf" || key === "logoUrl" || key === "lastReviewed"
+        key === "affiliateUrl" || key === "notForYouIf" || key === "lastReviewed"
           ? body[key] || null
+          : key === "logoUrl"
+            ? sanitizeLogoUrlForStorage(
+                typeof body.logoUrl === "string" ? body.logoUrl : null,
+                typeof body.url === "string" ? body.url : "",
+                typeof body.slug === "string" ? body.slug : undefined
+              )
           : key === "rating"
             ? body[key] === "" || body[key] === null
               ? null
@@ -119,7 +126,11 @@ export function serializeTool(tool: Tool & { _count?: { clicks: number }; affili
     featured: tool.featured,
     rating: tool.rating,
     published: tool.published,
-    logoUrl: tool.logoUrl,
+    logoUrl: resolveToolLogoUrl({
+      logoUrl: tool.logoUrl,
+      url: tool.url,
+      slug: tool.slug,
+    }) || null,
     screenshots: parseJson(tool.screenshots, []),
     whoIsItFor: tool.whoIsItFor,
     notForYouIf: tool.notForYouIf,

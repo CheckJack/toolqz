@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db";
+import { resolveToolLogoUrl } from "@/lib/logo-url";
 import { Website } from "@/types";
 import type { Tool } from "@prisma/client";
 
@@ -23,7 +24,11 @@ export function mapToolToWebsite(tool: Tool): Website {
     tags: parseJson(tool.tags, []),
     featured: tool.featured,
     rating: tool.rating ?? undefined,
-    logoUrl: tool.logoUrl ?? "",
+    logoUrl: resolveToolLogoUrl({
+      logoUrl: tool.logoUrl,
+      url: tool.url,
+      slug: tool.slug,
+    }),
     screenshots: parseJson(tool.screenshots, []),
     whoIsItFor: tool.whoIsItFor,
     notForYouIf: tool.notForYouIf ?? undefined,
