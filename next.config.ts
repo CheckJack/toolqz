@@ -31,6 +31,15 @@ const nextConfig: NextConfig = {
         source: "/(.*)",
         headers: securityHeaders,
       },
+      {
+        source: "/admin/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+          },
+        ],
+      },
     ];
   },
 };
