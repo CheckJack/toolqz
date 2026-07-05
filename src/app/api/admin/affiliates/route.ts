@@ -132,6 +132,7 @@ export async function POST(request: NextRequest) {
         companyName,
         website: body.website ?? null,
         signupUrl: body.signupUrl ?? null,
+        portalUrl: body.portalUrl ?? null,
         status: String(body.status ?? "PENDING"),
         priority: String(body.priority ?? "MEDIUM"),
         category: body.category ?? null,

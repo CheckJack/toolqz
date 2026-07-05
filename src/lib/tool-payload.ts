@@ -28,6 +28,7 @@ export function buildToolData(body: Record<string, unknown>) {
     "overview",
     "url",
     "affiliateUrl",
+    "listingType",
     "category",
     "featured",
     "rating",
@@ -43,6 +44,8 @@ export function buildToolData(body: Record<string, unknown>) {
       data[key] =
         key === "affiliateUrl" || key === "notForYouIf" || key === "lastReviewed"
           ? body[key] || null
+          : key === "listingType"
+            ? body[key] === "AFFILIATE" ? "AFFILIATE" : "EDITORIAL"
           : key === "logoUrl"
             ? sanitizeLogoUrlForStorage(
                 typeof body.logoUrl === "string" ? body.logoUrl : null,
@@ -86,6 +89,7 @@ export interface AdminTool {
   highlights: string[];
   url: string;
   affiliateUrl: string | null;
+  listingType: string;
   category: string;
   tags: string[];
   featured: boolean;
@@ -121,6 +125,7 @@ export function serializeTool(tool: Tool & { _count?: { clicks: number }; affili
     highlights: parseJson(tool.highlights, []),
     url: tool.url,
     affiliateUrl: tool.affiliateUrl,
+    listingType: tool.listingType === "AFFILIATE" ? "AFFILIATE" : "EDITORIAL",
     category: tool.category,
     tags: parseJson(tool.tags, []),
     featured: tool.featured,

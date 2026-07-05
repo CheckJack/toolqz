@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ExternalLink, MoreVertical, Pencil, Search } from "lucide-react";
+import { ExternalLink, LayoutGrid, MoreVertical, Pencil, Search } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AdminAffiliateForm,
@@ -652,6 +652,10 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
         description={`${total} ${listLabel ? `${listLabel} ` : ""}program${total === 1 ? "" : "s"}${view === "kanban" ? " · kanban view" : ""}`}
         action={
           <div className="flex flex-wrap gap-2">
+            <Link href="/admin/affiliate-directory" className="admin-toolbar-btn inline-flex items-center gap-1.5">
+              <LayoutGrid className="h-4 w-4" strokeWidth={1.75} />
+              Directory
+            </Link>
             {isAdmin && (
               <button
                 type="button"
@@ -944,6 +948,7 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
                     <th className="hidden lg:table-cell">Commission</th>
                     <th>Status</th>
                     <th className="hidden sm:table-cell">Assignee</th>
+                    <th className="hidden md:table-cell">Sign up</th>
                     <th className="w-12" aria-label="Actions" />
                   </tr>
                 </thead>
@@ -1003,6 +1008,16 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
                               {!overdue && dueSoon && (
                                 <span className="text-amber-400">Follow-up due</span>
                               )}
+                              {signup && (
+                                <a
+                                  href={signup}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-neon/80 hover:text-neon md:hidden"
+                                >
+                                  Sign up ↗
+                                </a>
+                              )}
                             </div>
                             <p className="mt-1 text-[11px] text-muted md:hidden">
                               {a.category ?? "—"}
@@ -1054,13 +1069,28 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
                               <span className="text-muted">{a.assignedTo?.name ?? "—"}</span>
                             )}
                           </td>
+                          <td className="hidden md:table-cell">
+                            {signup ? (
+                              <a
+                                href={signup}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="admin-link-accent inline-flex items-center gap-1 text-[12px]"
+                              >
+                                Sign up
+                                <ExternalLink className="h-3 w-3 shrink-0 opacity-70" strokeWidth={1.75} />
+                              </a>
+                            ) : (
+                              <span className="text-[12px] text-muted-dim">—</span>
+                            )}
+                          </td>
                           <td className="w-12 text-right">
-                            <AffiliateRowActions program={a} signupUrl={signup} />
+                            <AffiliateRowActions program={a} />
                           </td>
                         </tr>
                         {hasPending && (
                           <tr className="bg-neon/5">
-                            <td colSpan={isAdmin ? 7 : 6} className="px-4 py-2 sm:px-5">
+                            <td colSpan={isAdmin ? 8 : 7} className="px-4 py-2 sm:px-5">
                               <div className="flex flex-wrap items-center gap-2 text-xs">
                                 <span className="text-muted">
                                   Unsaved changes for {a.companyName}
@@ -1191,13 +1221,7 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
   );
 }
 
-function AffiliateRowActions({
-  program,
-  signupUrl,
-}: {
-  program: AffiliateProgram;
-  signupUrl: string | null;
-}) {
+function AffiliateRowActions({ program }: { program: AffiliateProgram }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -1260,9 +1284,9 @@ function AffiliateRowActions({
               View linked tool
             </Link>
           )}
-          {signupUrl && (
+          {program.portalUrl && (
             <a
-              href={signupUrl}
+              href={program.portalUrl}
               target="_blank"
               rel="noopener noreferrer"
               role="menuitem"
@@ -1270,7 +1294,7 @@ function AffiliateRowActions({
               className="admin-menu-item"
             >
               <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
-              Sign up page
+              Affiliate dashboard
             </a>
           )}
         </div>

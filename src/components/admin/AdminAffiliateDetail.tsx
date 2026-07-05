@@ -243,6 +243,16 @@ export function AdminAffiliateDetail({ id, user }: { id: string; user: SessionUs
           {affiliate.category && <p className="mt-1 text-sm text-muted">{affiliate.category}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
+          {affiliate.portalUrl && (
+            <a
+              href={affiliate.portalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg bg-neon/10 px-3 py-2 text-sm font-medium text-neon hover:bg-neon/15"
+            >
+              Open dashboard
+            </a>
+          )}
           {affiliate.signupUrl && (
             <>
               <a href={affiliate.signupUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-dark-border px-3 py-2 text-sm text-muted hover:text-neon">

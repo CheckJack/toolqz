@@ -42,6 +42,7 @@ export async function createToolFromAffiliateProgram(
       highlights: JSON.stringify([]),
       url: affiliate.website ?? affiliate.signupUrl ?? "https://example.com",
       affiliateUrl: affiliate.affiliateUrl,
+      listingType: affiliate.affiliateUrl ? "AFFILIATE" : "EDITORIAL",
       category: mapAffiliateCategoryToTool(affiliate.category),
       tags: JSON.stringify([]),
       screenshots: JSON.stringify([]),

@@ -36,7 +36,7 @@ export async function syncAffiliateUrlToTool(
   if (toolId && affiliateUrl) {
     await prisma.tool.update({
       where: { id: toolId },
-      data: { affiliateUrl },
+      data: { affiliateUrl, listingType: "AFFILIATE" },
     });
   }
 }
@@ -51,6 +51,7 @@ export function buildAffiliateData(
   if (body.companyName !== undefined) data.companyName = String(body.companyName);
   if (body.website !== undefined) data.website = body.website as string | null;
   if (body.signupUrl !== undefined) data.signupUrl = body.signupUrl as string | null;
+  if (body.portalUrl !== undefined) data.portalUrl = body.portalUrl as string | null;
   if (status !== undefined) data.status = status;
   if (body.priority !== undefined) data.priority = String(body.priority);
   if (body.category !== undefined) data.category = body.category as string | null;

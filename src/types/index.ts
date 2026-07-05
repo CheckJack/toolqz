@@ -1,3 +1,5 @@
+import type { ToolListingType } from "@/constants/tool-listing";
+
 export type Category = "all" | string;
 
 export interface HowItWorksStep {
@@ -29,6 +31,7 @@ export interface Website {
   tags: string[];
   featured?: boolean;
   rating?: number;
+  listingType?: ToolListingType;
   logoUrl: string;
   screenshots: string[];
   whoIsItFor: string;
@@ -45,6 +48,8 @@ export interface CategoryInfo {
   id: Category;
   label: string;
 }
+
+export type { ToolListingType } from "@/constants/tool-listing";
 
 export type WebsiteBase = Pick<
   Website,

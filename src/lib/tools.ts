@@ -24,6 +24,7 @@ export function mapToolToWebsite(tool: Tool): Website {
     tags: parseJson(tool.tags, []),
     featured: tool.featured,
     rating: tool.rating ?? undefined,
+    listingType: (tool.listingType === "AFFILIATE" ? "AFFILIATE" : "EDITORIAL") as import("@/constants/tool-listing").ToolListingType,
     logoUrl: resolveToolLogoUrl({
       logoUrl: tool.logoUrl,
       url: tool.url,
@@ -117,7 +118,11 @@ export async function getRelatedWebsites(
 export async function getToolRedirectUrl(slug: string): Promise<string | null> {
   const resolved = await resolvePublishedToolSlug(slug);
   if (!resolved) return null;
-  return resolved.tool.affiliateUrl || resolved.tool.url;
+  const { tool } = resolved;
+  if (tool.listingType === "AFFILIATE" && tool.affiliateUrl?.trim()) {
+    return tool.affiliateUrl.trim();
+  }
+  return tool.url;
 }
 
 export async function recordClick(

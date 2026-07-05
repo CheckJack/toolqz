@@ -6,6 +6,7 @@ import {
   FolderTree,
   Handshake,
   LayoutDashboard,
+  Link2,
   Mail,
   MessageSquare,
   ScrollText,
@@ -52,6 +53,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   {
     label: "Revenue",
     items: [
+      { href: "/admin/affiliate-directory", label: "Affiliate directory", icon: Link2 },
       { href: "/admin/affiliates", label: "Affiliate CRM", icon: Handshake, badgeKey: "crm" },
       { href: "/admin/finances", label: "Finances", icon: Wallet },
     ],
@@ -90,6 +92,7 @@ const PAGE_META: { match: (path: string) => boolean; meta: AdminPageMeta }[] = [
   { match: (p) => p.startsWith("/admin/blog/"), meta: { section: "Catalog", title: "Edit post" } },
   { match: (p) => p.startsWith("/admin/blog"), meta: { section: "Catalog", title: "Blog" } },
   { match: (p) => p.startsWith("/admin/affiliates/"), meta: { section: "Revenue", title: "Affiliate program" } },
+  { match: (p) => p.startsWith("/admin/affiliate-directory"), meta: { section: "Revenue", title: "Affiliate directory" } },
   { match: (p) => p.startsWith("/admin/affiliates"), meta: { section: "Revenue", title: "Affiliate CRM" } },
   { match: (p) => p.startsWith("/admin/finances"), meta: { section: "Revenue", title: "Finances" } },
   { match: (p) => p.startsWith("/admin/messages"), meta: { section: "Audience", title: "Messages" } },
@@ -109,6 +112,7 @@ export function getAdminPageMeta(pathname: string): AdminPageMeta {
 
 export function isAdminNavActive(pathname: string, href: string): boolean {
   if (href === "/admin") return pathname === "/admin";
+  if (href === "/admin/affiliate-directory") return pathname.startsWith("/admin/affiliate-directory");
   if (href === "/admin/affiliates") return pathname.startsWith("/admin/affiliates");
   if (href === "/admin/tools") return pathname.startsWith("/admin/tools");
   if (href === "/admin/blog") return pathname.startsWith("/admin/blog");

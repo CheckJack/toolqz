@@ -10,6 +10,7 @@ import { useToast } from "@/components/admin/Toast";
 import { SessionUser } from "@/lib/auth";
 import type { AdminTool } from "@/lib/tool-payload";
 import { getCategoryLabel } from "@/lib/websites";
+import { TOOL_LISTING_LABELS } from "@/constants/tool-listing";
 
 const PAGE_SIZE = 25;
 
@@ -192,9 +193,11 @@ export function AdminTools({ user }: { user: SessionUser }) {
   }
 
   function getWarning(tool: AdminTool): string | null {
-    if (tool.affiliate?.status === "ACTIVE" && !tool.affiliateUrl)
+    const isPartner = tool.listingType === "AFFILIATE";
+    if (isPartner && tool.affiliate?.status === "ACTIVE" && !tool.affiliateUrl)
       return "Active affiliate, no tracking URL";
-    if (tool.published && !tool.affiliateUrl) return "Published without affiliate URL";
+    if (isPartner && tool.published && !tool.affiliateUrl)
+      return "Partner listing without tracking URL";
     return null;
   }
 
@@ -348,7 +351,7 @@ export function AdminTools({ user }: { user: SessionUser }) {
                     <th className="text-right">Clicks</th>
                     <th>Live</th>
                     <th className="hidden sm:table-cell">Featured</th>
-                    <th className="hidden lg:table-cell">Affiliate</th>
+                    <th className="hidden lg:table-cell">Listing</th>
                     <th className="w-12" aria-label="Actions" />
                   </tr>
                 </thead>
@@ -429,22 +432,31 @@ export function AdminTools({ user }: { user: SessionUser }) {
                           )}
                         </td>
                         <td className="hidden lg:table-cell">
-                          {tool.affiliate ? (
+                          <span
+                            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                              tool.listingType === "AFFILIATE"
+                                ? "bg-neon/10 text-neon"
+                                : "bg-dark-border text-muted"
+                            }`}
+                          >
+                            {TOOL_LISTING_LABELS[tool.listingType === "AFFILIATE" ? "AFFILIATE" : "EDITORIAL"]}
+                          </span>
+                          {tool.listingType === "AFFILIATE" && tool.affiliate ? (
                             <Link
                               href={`/admin/affiliates/${tool.affiliate.id}`}
-                              className={`text-xs font-medium hover:underline ${statusColors[tool.affiliate.status] ?? "text-neon"}`}
+                              className={`mt-1 block text-xs font-medium hover:underline ${statusColors[tool.affiliate.status] ?? "text-neon"}`}
                             >
-                              {tool.affiliate.status.replace(/_/g, " ")}
+                              CRM · {tool.affiliate.status.replace(/_/g, " ")}
                             </Link>
-                          ) : (
+                          ) : tool.listingType === "AFFILIATE" ? (
                             <Link
                               href={`/admin/affiliates?action=create&companyName=${encodeURIComponent(tool.name)}&toolId=${tool.id}&website=${encodeURIComponent(tool.url)}`}
-                              className="text-xs text-muted hover:text-white"
+                              className="mt-1 block text-xs text-muted hover:text-white"
                             >
                               Add to CRM
                             </Link>
-                          )}
-                          {tool.affiliateUrl && (
+                          ) : null}
+                          {tool.listingType === "AFFILIATE" && tool.affiliateUrl && (
                             <span className="mt-0.5 block text-[11px] text-muted-dim">Tracking set</span>
                           )}
                         </td>

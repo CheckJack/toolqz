@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import type { FaqItem, HowItWorksStep, PricingTier } from "@/types";
 import type { AdminTool } from "@/lib/tool-payload";
+import {
+  TOOL_LISTING_DESCRIPTIONS,
+  TOOL_LISTING_LABELS,
+  TOOL_LISTING_TYPES,
+  type ToolListingType,
+} from "@/constants/tool-listing";
 import { DEFAULT_TOOL_CATEGORIES } from "@/lib/default-tool-categories";
 import {
   faqToText,
@@ -26,6 +32,7 @@ export interface ToolFormData {
   highlights: string[];
   url: string;
   affiliateUrl: string;
+  listingType: ToolListingType;
   category: string;
   tags: string[];
   featured: boolean;
@@ -51,6 +58,7 @@ export const emptyToolForm: ToolFormData = {
   highlights: [],
   url: "",
   affiliateUrl: "",
+  listingType: "EDITORIAL",
   category: "digital",
   tags: [],
   featured: false,
@@ -77,6 +85,7 @@ export function toolToForm(tool: AdminTool): ToolFormData {
     highlights: tool.highlights,
     url: tool.url,
     affiliateUrl: tool.affiliateUrl ?? "",
+    listingType: tool.listingType === "AFFILIATE" ? "AFFILIATE" : "EDITORIAL",
     category: tool.category,
     tags: tool.tags,
     featured: tool.featured,
@@ -103,7 +112,8 @@ export function formToToolPayload(form: ToolFormData) {
     overview: form.overview.trim() || form.description.trim(),
     highlights: form.highlights.filter(Boolean),
     url: form.url.trim(),
-    affiliateUrl: form.affiliateUrl.trim() || null,
+    affiliateUrl: form.listingType === "AFFILIATE" ? form.affiliateUrl.trim() || null : null,
+    listingType: form.listingType,
     category: form.category,
     tags: form.tags.filter(Boolean),
     featured: form.featured,
@@ -341,6 +351,41 @@ export function AdminToolForm({ form, onChange, isNew, isAdmin = true, originalS
             />
           </div>
           <div className="sm:col-span-2">
+            <fieldset>
+              <legend className="mb-2 block text-sm text-muted">How we list this tool</legend>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {TOOL_LISTING_TYPES.map((type) => (
+                  <label
+                    key={type}
+                    className={`flex cursor-pointer gap-3 rounded-xl border p-3 transition-colors ${
+                      form.listingType === type
+                        ? "border-neon/40 bg-neon/5"
+                        : "border-dark-border hover:border-border-hover"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="listingType"
+                      value={type}
+                      checked={form.listingType === type}
+                      onChange={() => set("listingType", type)}
+                      className="mt-1"
+                    />
+                    <span>
+                      <span className="block text-sm font-medium text-white">
+                        {TOOL_LISTING_LABELS[type]}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted">
+                        {TOOL_LISTING_DESCRIPTIONS[type]}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+          {form.listingType === "AFFILIATE" && (
+          <div className="sm:col-span-2">
             <label htmlFor="tool-affiliate-url" className="mb-1 block text-sm text-muted">
               Affiliate tracking URL
             </label>
@@ -383,6 +428,7 @@ export function AdminToolForm({ form, onChange, isNew, isAdmin = true, originalS
               </>
             )}
           </div>
+          )}
           <div>
             <label htmlFor="tool-rating" className="mb-1 block text-sm text-muted">
               Rating (0–5)

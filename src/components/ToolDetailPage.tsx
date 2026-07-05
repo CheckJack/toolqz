@@ -10,6 +10,7 @@ import { MobileStickyVisitCta } from "@/components/tool-detail/MobileStickyVisit
 import { ScreenshotGallery } from "@/components/tool-detail/ScreenshotGallery";
 import { ToolLogo } from "@/components/tool-detail/ToolLogo";
 import { getCategoryLabel, getDomain } from "@/lib/websites";
+import { isAffiliateListing } from "@/constants/tool-listing";
 import { Website } from "@/types";
 
 interface ToolDetailPageProps {
@@ -56,6 +57,14 @@ function AffiliateDisclosure() {
   );
 }
 
+function EditorialNote() {
+  return (
+    <p className="text-xs leading-relaxed text-muted">
+      We recommend this tool based on our review — we are not an affiliate partner.
+    </p>
+  );
+}
+
 function SectionHeading({
   title,
   subtitle,
@@ -68,6 +77,7 @@ function SectionHeading({
 
 export function ToolDetailPage({ website, related }: ToolDetailPageProps) {
   const domain = getDomain(website.url);
+  const isPartner = isAffiliateListing(website.listingType);
 
   return (
     <>
@@ -92,6 +102,8 @@ export function ToolDetailPage({ website, related }: ToolDetailPageProps) {
                   <p className="mb-2 text-[13px] text-muted">
                     {getCategoryLabel(website.category)}
                     {website.featured && " · Editor's pick"}
+                    {!isPartner && " · Editorial recommendation"}
+                    {isPartner && " · Affiliate partner"}
                   </p>
                   <h1 className="break-words text-2xl font-medium tracking-[-0.02em] text-white sm:text-3xl">
                     {website.name}
@@ -105,7 +117,7 @@ export function ToolDetailPage({ website, related }: ToolDetailPageProps) {
             <p className="mt-6 text-[16px] leading-relaxed text-white/90">{website.description}</p>
             <div id="tool-visit-top" className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center">
               <VisitButton slug={website.slug} name={website.name} className="w-full sm:w-auto" />
-              <AffiliateDisclosure />
+              {isPartner ? <AffiliateDisclosure /> : <EditorialNote />}
             </div>
           </ScrollReveal>
 

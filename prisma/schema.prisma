@@ -52,6 +52,7 @@ model Tool {
   highlights   String
   url          String
   affiliateUrl String?
+  listingType  String            @default("EDITORIAL")
   category     String
   tags         String
   featured     Boolean           @default(false)
@@ -114,6 +115,7 @@ model AffiliateProgram {
   companyName      String
   website          String?
   signupUrl        String?
+  portalUrl        String?
   status           String              @default("PENDING")
   priority         String              @default("MEDIUM")
   category         String?

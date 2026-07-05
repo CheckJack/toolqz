@@ -43,6 +43,7 @@ export interface AffiliateProgram {
   companyName: string;
   website: string | null;
   signupUrl: string | null;
+  portalUrl: string | null;
   status: AffiliateStatus;
   priority: AffiliatePriority;
   category: string | null;

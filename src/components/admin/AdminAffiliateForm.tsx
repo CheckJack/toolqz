@@ -13,6 +13,7 @@ export interface AffiliateFormData {
   category: string;
   website: string;
   signupUrl: string;
+  portalUrl: string;
   commission: string;
   isRecurring: string;
   cookieDuration: string;
@@ -37,6 +38,7 @@ export const emptyForm: AffiliateFormData = {
   category: "",
   website: "",
   signupUrl: "",
+  portalUrl: "",
   commission: "",
   isRecurring: "",
   cookieDuration: "",
@@ -62,6 +64,7 @@ export function affiliateToForm(a: AffiliateProgram): AffiliateFormData {
     category: a.category ?? "",
     website: a.website ?? "",
     signupUrl: a.signupUrl ?? "",
+    portalUrl: a.portalUrl ?? "",
     commission: a.commission ?? "",
     isRecurring: a.isRecurring === true ? "yes" : a.isRecurring === false ? "no" : "",
     cookieDuration: a.cookieDuration ?? "",
@@ -88,6 +91,7 @@ export function formToPayload(form: AffiliateFormData) {
     category: form.category || null,
     website: form.website || null,
     signupUrl: form.signupUrl || null,
+    portalUrl: form.portalUrl || null,
     commission: form.commission || null,
     isRecurring:
       form.isRecurring === "yes" ? true : form.isRecurring === "no" ? false : null,
@@ -159,6 +163,17 @@ export function AdminAffiliateForm({ form, onChange, users, tools }: Props) {
       <div>
         <label className="mb-1 block text-sm text-muted">Signup URL</label>
         <input className={inputClass} type="url" value={form.signupUrl} onChange={(e) => set("signupUrl", e.target.value)} />
+      </div>
+      <div>
+        <label className="mb-1 block text-sm text-muted">Affiliate dashboard URL</label>
+        <input
+          className={inputClass}
+          type="url"
+          value={form.portalUrl}
+          onChange={(e) => set("portalUrl", e.target.value)}
+          placeholder="https://affiliates.example.com/login"
+        />
+        <p className="mt-1 text-xs text-muted">Login page for your affiliate account (partner portal).</p>
       </div>
       <div>
         <label className="mb-1 block text-sm text-muted">Commission</label>
