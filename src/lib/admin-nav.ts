@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
   BarChart3,
-  Bell,
   FileText,
   FolderTree,
   Handshake,
@@ -12,10 +11,10 @@ import {
   MessageSquare,
   ScrollText,
   Server,
-  Settings,
   Users,
   Wallet,
   Wrench,
+  BookOpen,
 } from "lucide-react";
 
 export type NavBadgeKey = "crm" | "messages" | null;
@@ -43,7 +42,10 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
   },
   {
     label: "Insights",
-    items: [{ href: "/admin/analytics", label: "Analytics", icon: BarChart3 }],
+    items: [
+      { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+      { href: "/admin/hosting", label: "Hosting", icon: Server, adminOnly: true },
+    ],
   },
   {
     label: "Catalog",
@@ -51,7 +53,6 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
       { href: "/admin/tools", label: "Tools", icon: Wrench },
       { href: "/admin/categories", label: "Categories", icon: FolderTree },
       { href: "/admin/blog", label: "Blog", icon: FileText },
-      { href: "/admin/agent", label: "Assistant", icon: MessageSquare },
     ],
   },
   {
@@ -66,7 +67,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     label: "Audience",
     items: [
       { href: "/admin/messages", label: "Messages", icon: MessageSquare, badgeKey: "messages" },
-      { href: "/admin/notifications", label: "Notifications", icon: Bell },
+      { href: "/admin/playbook", label: "Playbook", icon: BookOpen },
       { href: "/admin/subscribers", label: "Mailing list", icon: Mail },
     ],
   },
@@ -74,8 +75,6 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     label: "Team & system",
     items: [
       { href: "/admin/team", label: "Team", icon: Users },
-      { href: "/admin/settings", label: "Settings", icon: Settings },
-      { href: "/admin/hosting", label: "Hosting", icon: Server, adminOnly: true },
       { href: "/admin/audit", label: "Audit log", icon: ScrollText, adminOnly: true },
     ],
   },
@@ -90,6 +89,7 @@ const PAGE_META: { match: (path: string) => boolean; meta: AdminPageMeta }[] = [
   { match: (p) => p === "/admin", meta: { section: "Overview", title: "Dashboard" } },
   { match: (p) => p.startsWith("/admin/tasks"), meta: { section: "Overview", title: "Tasks" } },
   { match: (p) => p.startsWith("/admin/analytics"), meta: { section: "Insights", title: "Analytics" } },
+  { match: (p) => p.startsWith("/admin/hosting"), meta: { section: "Insights", title: "Hosting" } },
   { match: (p) => p === "/admin/tools/new", meta: { section: "Catalog", title: "New tool" } },
   { match: (p) => p.startsWith("/admin/tools/"), meta: { section: "Catalog", title: "Edit tool" } },
   { match: (p) => p.startsWith("/admin/tools"), meta: { section: "Catalog", title: "Tools" } },
@@ -101,11 +101,11 @@ const PAGE_META: { match: (path: string) => boolean; meta: AdminPageMeta }[] = [
   { match: (p) => p.startsWith("/admin/affiliates"), meta: { section: "Revenue", title: "Affiliate CRM" } },
   { match: (p) => p.startsWith("/admin/finances"), meta: { section: "Revenue", title: "Finances" } },
   { match: (p) => p.startsWith("/admin/messages"), meta: { section: "Audience", title: "Messages" } },
+  { match: (p) => p.startsWith("/admin/playbook"), meta: { section: "Audience", title: "Playbook" } },
   { match: (p) => p.startsWith("/admin/notifications"), meta: { section: "Audience", title: "Notifications" } },
   { match: (p) => p.startsWith("/admin/subscribers"), meta: { section: "Audience", title: "Mailing list" } },
   { match: (p) => p.startsWith("/admin/team"), meta: { section: "Team & system", title: "Team" } },
   { match: (p) => p.startsWith("/admin/settings"), meta: { section: "Team & system", title: "Settings" } },
-  { match: (p) => p.startsWith("/admin/hosting"), meta: { section: "Team & system", title: "Hosting" } },
   { match: (p) => p.startsWith("/admin/audit"), meta: { section: "Team & system", title: "Audit log" } },
   { match: (p) => p.startsWith("/admin/agent"), meta: { section: "Tools", title: "Assistant" } },
 ];

@@ -31,6 +31,7 @@ model User {
   passwordResetTokens PasswordResetToken[]
   assignedTasks      AdminTask[]          @relation("AssignedTasks")
   createdTasks         AdminTask[]          @relation("CreatedTasks")
+  playbookSnippets   AdminPlaybookSnippet[]
 }
 
 model PasswordResetToken {
@@ -355,4 +356,23 @@ model AdminTask {
   @@index([dueAt])
   @@index([status])
   @@index([affiliateProgramId])
+}
+
+model AdminPlaybookSnippet {
+  id          String   @id @default(cuid())
+  question    String
+  answer      String
+  category    String   @default("other")
+  aliases     String?
+  tags        String?
+  pinned      Boolean  @default(false)
+  sortOrder   Int      @default(0)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@index([pinned])
+  @@index([sortOrder])
 }

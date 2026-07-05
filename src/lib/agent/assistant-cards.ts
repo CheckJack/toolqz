@@ -215,6 +215,8 @@ function buildConfirmYesMessage(action: string, name: string): string {
       return `Yes, confirm unpublish blog post "${name}"`;
     case "delete_task":
       return `Yes, confirm delete task "${name}"`;
+    case "delete_playbook_snippet":
+      return `Yes, confirm delete playbook snippet "${name}"`;
     default:
       return "Yes, confirm";
   }
@@ -326,6 +328,53 @@ export function cardsFromTasks(result: {
           .filter(Boolean)
           .join(" · "),
         href: t.tasksUrl,
+      })),
+    },
+  ];
+}
+
+export function cardsFromPlaybook(result: {
+  query: string;
+  total: number;
+  showing: number;
+  snippets: {
+    question: string;
+    answer: string;
+    category: string;
+    matchReason?: string | null;
+    score?: number | null;
+  }[];
+}): AssistantCard[] {
+  if (result.snippets.length === 0) {
+    return [
+      {
+        type: "alert",
+        variant: "info",
+        message: result.query
+          ? `No playbook snippets matched "${result.query}". Try different words or add aliases on /admin/playbook.`
+          : "No playbook snippets yet.",
+      },
+    ];
+  }
+
+  const title = result.query
+    ? `Playbook (${result.showing} match${result.showing === 1 ? "" : "es"})`
+    : `Playbook (${result.showing} of ${result.total})`;
+
+  return [
+    {
+      type: "ranked_list",
+      title,
+      items: result.snippets.map((s) => ({
+        label: s.question,
+        value: s.category.replace(/_/g, " "),
+        hint: [
+          s.matchReason,
+          s.answer.length > 90 ? `${s.answer.slice(0, 90)}…` : s.answer,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        href: "/admin/playbook",
       })),
     },
   ];

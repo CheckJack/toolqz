@@ -77,6 +77,10 @@ export function buildReceiptMessage(tool: AgentToolName, result: unknown): strin
       return r.published === false
         ? `Unpublished blog post ${name || ""}.`.trim()
         : `Published blog post ${name || ""}.`.trim();
+    case "delete_blog_post":
+      return `Deleted blog post ${name || ""}.`.trim();
+    case "delete_finance_entry":
+      return `Deleted finance entry ${name || ""}.`.trim();
     default:
       return name ? `Updated ${name}.` : "Done.";
   }
