@@ -6,6 +6,7 @@ import {
   parseTaskDueAt,
 } from "@/lib/admin-tasks";
 import { isTaskSection, isTaskStatus, TASK_SECTIONS } from "@/constants/admin-tasks";
+import { notifyTaskCompleted } from "@/lib/notifications";
 
 const taskInclude = {
   assignedTo: { select: { id: true, name: true } },
@@ -187,6 +188,8 @@ export async function updateAdminTaskForAgent(
   const task = await findAdminTask(args);
   if (!task) throw new Error("Task not found — provide task_id or task_title");
 
+  const wasDone = task.status === "DONE";
+
   const data: {
     title?: string;
     description?: string | null;
@@ -237,6 +240,20 @@ export async function updateAdminTaskForAgent(
     data,
     include: taskInclude,
   });
+
+  if (updated.status === "DONE" && !wasDone) {
+    const actor = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { name: true },
+    });
+    void notifyTaskCompleted({
+      taskId: updated.id,
+      taskTitle: updated.title,
+      completedByUserId: userId,
+      completedByName: actor?.name ?? "A team member",
+      linkUrl: updated.linkUrl,
+    });
+  }
 
   return serializeAgentTask(updated);
 }

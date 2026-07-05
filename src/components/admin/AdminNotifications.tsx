@@ -48,6 +48,10 @@ function formatWhen(iso: string) {
 
 function typeLabel(type: string): string | null {
   if (type === "follow_up_due") return "Follow-up";
+  if (type === "team_message") return "Message";
+  if (type === "task_completed") return "Task";
+  if (type.startsWith("build_")) return "Deploy";
+  if (type === "site_down" || type === "site_recovered") return "Hosting";
   return null;
 }
 

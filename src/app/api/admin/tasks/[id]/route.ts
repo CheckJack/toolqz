@@ -8,6 +8,7 @@ import {
 } from "@/lib/admin-tasks";
 import { logAudit } from "@/lib/audit-log";
 import { requireAdmin, requireSession } from "@/lib/auth";
+import { notifyTaskCompleted } from "@/lib/notifications";
 import { prisma } from "@/lib/db";
 
 const taskInclude = {
@@ -140,6 +141,8 @@ export async function PATCH(
       data.completedAt = status === "DONE" ? new Date() : null;
     }
 
+    const wasDone = existing.status === "DONE";
+
     const task = await prisma.adminTask.update({
       where: { id },
       data,
@@ -150,6 +153,16 @@ export async function PATCH(
       userId: session.id,
       entityId: task.id,
     });
+
+    if (task.status === "DONE" && !wasDone) {
+      void notifyTaskCompleted({
+        taskId: task.id,
+        taskTitle: task.title,
+        completedByUserId: session.id,
+        completedByName: session.name,
+        linkUrl: task.linkUrl,
+      });
+    }
 
     return NextResponse.json({ task: serializeTask(task) });
   } catch (error) {

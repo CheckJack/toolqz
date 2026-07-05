@@ -1,6 +1,7 @@
 import { getDeploymentIssues } from "@/lib/env";
 import { siteStatusEmail } from "@/lib/email-templates";
 import { getHostingerDomain, pingPublicSite } from "@/lib/hostinger-api";
+import { notifySiteStatus } from "@/lib/notifications";
 import {
   getAdminAlertRecipients,
   getMonitorState,
@@ -50,6 +51,7 @@ export async function runUptimeCheck(options?: { force?: boolean }) {
   const prevHealthy = prevRaw === null ? true : prevRaw === "true";
 
   let emailsSent = 0;
+  let notificationsCreated = 0;
   let alerted = false;
 
   if (options?.force) {
@@ -65,7 +67,13 @@ export async function runUptimeCheck(options?: { force?: boolean }) {
       });
       emailsSent += await sendAlertEmails([user], mail);
     }
-    alerted = emailsSent > 0;
+    notificationsCreated = await notifySiteStatus({
+      healthy: result.healthy,
+      domain,
+      statusCode: result.statusCode,
+      detail: result.detail ?? null,
+    });
+    alerted = notificationsCreated > 0;
 
     return {
       ok: true,
@@ -76,6 +84,7 @@ export async function runUptimeCheck(options?: { force?: boolean }) {
       forced: true,
       alerted,
       emailsSent,
+      notificationsCreated,
     };
   }
 
@@ -92,6 +101,12 @@ export async function runUptimeCheck(options?: { force?: boolean }) {
       });
       emailsSent += await sendAlertEmails([user], mail);
     }
+    notificationsCreated = await notifySiteStatus({
+      healthy: result.healthy,
+      domain,
+      statusCode: result.statusCode,
+      detail: result.detail ?? null,
+    });
     alerted = true;
   }
 
@@ -105,5 +120,6 @@ export async function runUptimeCheck(options?: { force?: boolean }) {
     transitioned: result.healthy !== prevHealthy,
     alerted,
     emailsSent,
+    notificationsCreated,
   };
 }

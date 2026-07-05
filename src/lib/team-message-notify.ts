@@ -14,7 +14,7 @@ export async function notifyTeamMessage(input: {
     select: { id: true, email: true, name: true, emailMessageAlerts: true },
   });
 
-  if (!recipient?.emailMessageAlerts) return { notified: false };
+  if (!recipient) return { notified: false, emailSent: false };
 
   const preview = input.body.trim();
 
@@ -26,6 +26,10 @@ export async function notifyTeamMessage(input: {
     href: "/admin/messages",
     entityId: input.conversationId,
   });
+
+  if (!recipient.emailMessageAlerts) {
+    return { notified: true, emailSent: false };
+  }
 
   const mail = teamMessageEmail({
     recipientName: recipient.name,
@@ -41,9 +45,9 @@ export async function notifyTeamMessage(input: {
       text: mail.text,
       html: mail.html,
     });
-    return { notified: true };
+    return { notified: true, emailSent: true };
   } catch (error) {
     console.error(`[team-message] email failed for ${recipient.email}:`, error);
-    return { notified: false };
+    return { notified: true, emailSent: false };
   }
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { playNotificationSound, unlockNotificationSound } from "@/lib/notification-sound";
 
 interface NotificationItem {
   id: string;
@@ -14,30 +15,81 @@ interface NotificationItem {
   createdAt: string;
 }
 
+const POLL_MS = 8_000;
+
 export function AdminNotificationBell() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
+  const sessionStartRef = useRef(Date.now());
+  const announcedIdsRef = useRef<Set<string>>(new Set());
+  const bootstrappedRef = useRef(false);
+
+  const announceNewNotifications = useCallback((newItems: NotificationItem[]) => {
+    let shouldPlay = false;
+
+    for (const item of newItems) {
+      if (item.readAt) continue;
+      if (announcedIdsRef.current.has(item.id)) continue;
+
+      const createdAt = new Date(item.createdAt).getTime();
+      if (!bootstrappedRef.current || createdAt <= sessionStartRef.current) {
+        announcedIdsRef.current.add(item.id);
+        continue;
+      }
+
+      announcedIdsRef.current.add(item.id);
+      shouldPlay = true;
+    }
+
+    if (shouldPlay) {
+      void playNotificationSound();
+    }
+  }, []);
 
   const load = useCallback(() => {
     fetch("/api/admin/notifications")
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (data) {
-          setItems(data.items ?? []);
-          setUnread(data.unread ?? 0);
-        }
+        if (!data) return;
+
+        const newItems: NotificationItem[] = data.items ?? [];
+        announceNewNotifications(newItems);
+        bootstrappedRef.current = true;
+        setItems(newItems);
+        setUnread(data.unread ?? 0);
       })
       .catch(() => {});
-  }, []);
+  }, [announceNewNotifications]);
 
   useEffect(() => {
     load();
-    const interval = setInterval(load, 60_000);
-    return () => clearInterval(interval);
+    const interval = setInterval(load, POLL_MS);
+
+    function onVisible() {
+      if (document.visibilityState === "visible") load();
+    }
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [load]);
+
+  useEffect(() => {
+    function unlock() {
+      unlockNotificationSound();
+    }
+    window.addEventListener("pointerdown", unlock);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", unlock);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -85,7 +137,10 @@ export function AdminNotificationBell() {
     <div className="relative" ref={panelRef}>
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          unlockNotificationSound();
+          setOpen((o) => !o);
+        }}
         className="relative rounded-lg border border-dark-border p-2 text-muted transition-colors hover:border-neon/30 hover:text-white"
         aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}
       >
@@ -150,13 +205,25 @@ export function AdminNotificationBell() {
             >
               My follow-ups →
             </Link>
-            <Link
-              href="/admin/notifications"
-              onClick={() => setOpen(false)}
-              className="text-xs text-muted hover:text-white"
-            >
-              View all
-            </Link>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  unlockNotificationSound();
+                  void playNotificationSound();
+                }}
+                className="text-xs text-muted hover:text-white"
+              >
+                Test sound
+              </button>
+              <Link
+                href="/admin/notifications"
+                onClick={() => setOpen(false)}
+                className="text-xs text-muted hover:text-white"
+              >
+                View all
+              </Link>
+            </div>
           </div>
         </div>
       )}

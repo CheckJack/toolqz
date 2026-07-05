@@ -1,5 +1,6 @@
 import { buildStatusEmail } from "@/lib/email-templates";
 import { getHostingerDomain, isHostingerConfigured, listBuilds } from "@/lib/hostinger-api";
+import { notifyBuildStatus } from "@/lib/notifications";
 import {
   getAdminAlertRecipients,
   getMonitorState,
@@ -89,6 +90,12 @@ export async function runBuildMonitor(options?: { force?: boolean }) {
       emailsSent += await sendAlertEmails([user], mail);
     }
 
+    const notificationsCreated = await notifyBuildStatus({
+      status,
+      domain,
+      buildId: latest.uuid,
+    });
+
     return {
       ok: true,
       skipped: false,
@@ -96,6 +103,7 @@ export async function runBuildMonitor(options?: { force?: boolean }) {
       buildId: latest.uuid,
       status: latest.status,
       emailsSent,
+      notificationsCreated,
       recipients: recipients.length,
     };
   }
@@ -109,6 +117,7 @@ export async function runBuildMonitor(options?: { force?: boolean }) {
   };
 
   let emailsSent = 0;
+  let notificationsCreated = 0;
 
   async function notify(
     status: "running" | "completed" | "failed"
@@ -123,6 +132,11 @@ export async function runBuildMonitor(options?: { force?: boolean }) {
       });
       emailsSent += await sendAlertEmails([user], mail);
     }
+    notificationsCreated += await notifyBuildStatus({
+      status,
+      domain,
+      buildId: latest.uuid,
+    });
   }
 
   if (prev?.uuid !== latest.uuid) {
@@ -154,6 +168,7 @@ export async function runBuildMonitor(options?: { force?: boolean }) {
     buildId: latest.uuid,
     status: latest.status,
     emailsSent,
+    notificationsCreated,
     recipients: recipients.length,
   };
 }

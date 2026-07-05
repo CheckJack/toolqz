@@ -64,9 +64,9 @@ function formatResult(action: AlertAction, data: Record<string, unknown>): strin
       return `Sent ${data.emailsSent ?? 0} email(s) to ${data.users ?? 0} user(s) · ${data.usersWithTasks ?? 0} had open tasks`;
     case "build-monitor":
       if (data.skipped) return `Skipped: ${String(data.reason ?? "nothing to send")}`;
-      return `Sent ${data.emailsSent ?? 0} email(s) · build ${String(data.status ?? "—")}`;
+      return `Sent ${data.emailsSent ?? 0} email(s), ${data.notificationsCreated ?? 0} in-app notification(s) · build ${String(data.status ?? "—")}`;
     case "uptime-check":
-      return `Sent ${data.emailsSent ?? 0} email(s) · site ${data.healthy ? "healthy" : "unhealthy"} (HTTP ${data.statusCode ?? "—"})`;
+      return `Sent ${data.emailsSent ?? 0} email(s), ${data.notificationsCreated ?? 0} in-app notification(s) · site ${data.healthy ? "healthy" : "unhealthy"} (HTTP ${data.statusCode ?? "—"})`;
     case "follow-ups":
       return `Checked ${data.checked ?? 0} program(s) · ${data.digestItems ?? 0} due · ${data.emailsSent ?? 0} digest email(s) · ${data.inAppCreated ?? 0} in-app notification(s)`;
     default:
