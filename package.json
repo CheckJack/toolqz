@@ -29,6 +29,7 @@
     "hostinger:setup-mcp": "node scripts/hostinger.mjs setup-mcp",
     "ga4:env": "node scripts/ga4-env-oneline.mjs",
     "test": "node --import tsx --test src/lib/agent/__tests__/*.test.ts",
+    "test:email": "node --import tsx scripts/test-email.mjs",
     "postinstall": "node scripts/sync-prisma-provider.mjs && prisma generate"
   },
   "prisma": {
