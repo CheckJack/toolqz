@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { AdminAuthShell, adminAuthInputClass } from "@/components/admin/AdminAuthShell";
+import {
+  ADMIN_FORGOT_PASSWORD_PATH,
+  ADMIN_SIGN_IN_PATH,
+} from "@/lib/auth-routes";
 
 function AdminResetPasswordFormInner() {
   const router = useRouter();
@@ -89,12 +93,12 @@ function AdminResetPasswordFormInner() {
             Request a new link from the sign-in page. Reset links expire after 1 hour.
           </p>
           <Link
-            href="/admin/login/forgot-password"
+            href={ADMIN_FORGOT_PASSWORD_PATH}
             className="inline-block w-full rounded-xl bg-neon py-3 text-center text-sm font-semibold text-ink transition-colors hover:bg-neon-dim"
           >
             Request new link
           </Link>
-          <Link href="/admin/login" className="block text-sm text-neon hover:underline">
+          <Link href={ADMIN_SIGN_IN_PATH} className="block text-sm text-neon hover:underline">
             Back to sign in
           </Link>
         </div>
@@ -109,7 +113,7 @@ function AdminResetPasswordFormInner() {
           <p className="text-sm text-muted">Your password has been changed successfully.</p>
           <button
             type="button"
-            onClick={() => router.push("/admin/login")}
+            onClick={() => router.push(ADMIN_SIGN_IN_PATH)}
             className="w-full rounded-xl bg-neon py-3 font-semibold text-ink transition-colors hover:bg-neon-dim"
           >
             Sign in

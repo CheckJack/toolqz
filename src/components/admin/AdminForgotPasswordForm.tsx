@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AdminAuthShell, adminAuthInputClass } from "@/components/admin/AdminAuthShell";
+import { ADMIN_SIGN_IN_PATH } from "@/lib/auth-routes";
 
 export function AdminForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -64,7 +65,7 @@ export function AdminForgotPasswordForm() {
               Try another email
             </button>
             <Link
-              href="/admin/login"
+              href={ADMIN_SIGN_IN_PATH}
               className="w-full rounded-xl bg-neon py-3 text-center text-sm font-semibold text-ink transition-colors hover:bg-neon-dim"
             >
               Back to sign in
@@ -100,7 +101,7 @@ export function AdminForgotPasswordForm() {
           </button>
 
           <p className="text-center text-sm text-muted">
-            <Link href="/admin/login" className="text-neon hover:underline">
+            <Link href={ADMIN_SIGN_IN_PATH} className="text-neon hover:underline">
               Back to sign in
             </Link>
           </p>

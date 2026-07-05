@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { MessageSquare, Search } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { BrandLogo } from "@/components/BrandLogo";
+import { ADMIN_SIGN_IN_PATH } from "@/lib/auth-routes";
 import { AdminAssistantWidget } from "@/components/admin/AdminAssistantWidget";
 import { AdminCommandPalette } from "@/components/admin/AdminCommandPalette";
 import { AdminNotificationBell } from "@/components/admin/AdminNotificationBell";
@@ -84,7 +85,7 @@ function AdminShellInner({
     if (btn) btn.disabled = true;
     try {
       await fetch("/api/auth/login", { method: "DELETE" });
-      router.push("/admin/login");
+      router.push(ADMIN_SIGN_IN_PATH);
       router.refresh();
     } catch {
       if (btn) btn.disabled = false;

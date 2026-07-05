@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { headers } from "next/headers";
 import { Suspense } from "react";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { CookieNotice } from "@/components/CookieNotice";
@@ -55,26 +56,32 @@ export const metadata: Metadata = {
 
 const themeInitScript = `(function(){try{var d=document.documentElement;d.setAttribute('data-theme','dark');d.style.colorScheme='dark';localStorage.removeItem(${JSON.stringify(THEME_STORAGE_KEY)});}catch(e){}})();`;
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const isAuthPage = (await headers()).get("x-toolqz-auth-page") === "1";
+
   return (
     <html lang="en" data-theme="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <ThemeProvider>
-          <SiteBackground />
-          <PublicContent>{children}</PublicContent>
-          <Suspense fallback={null}>
-            <GoogleAnalytics />
-          </Suspense>
-          <CookieNotice />
-          <NewsletterPopup />
-        </ThemeProvider>
+        {isAuthPage ? (
+          children
+        ) : (
+          <ThemeProvider>
+            <SiteBackground />
+            <PublicContent>{children}</PublicContent>
+            <Suspense fallback={null}>
+              <GoogleAnalytics />
+            </Suspense>
+            <CookieNotice />
+            <NewsletterPopup />
+          </ThemeProvider>
+        )}
       </body>
     </html>
   );
