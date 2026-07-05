@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { ExternalLink, MoreVertical, Pencil, Search } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { useToast } from "@/components/admin/Toast";
 import { SessionUser } from "@/lib/auth";
 import type { AdminTool } from "@/lib/tool-payload";
+import { getCategoryLabel } from "@/lib/websites";
 
 const PAGE_SIZE = 25;
 
@@ -40,6 +42,7 @@ export function AdminTools({ user }: { user: SessionUser }) {
   const [total, setTotal] = useState(0);
   const [tabCounts, setTabCounts] = useState({ all: 0, published: 0, draft: 0 });
   const [categories, setCategories] = useState<string[]>([]);
+  const [categoryLabels, setCategoryLabels] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [searchInput, setSearchInput] = useState(searchParams.get("search") ?? "");
@@ -110,6 +113,7 @@ export function AdminTools({ user }: { user: SessionUser }) {
       setTotal(data.total ?? 0);
       setTabCounts(data.counts ?? { all: data.total ?? 0, published: 0, draft: 0 });
       setCategories(data.categories ?? []);
+      setCategoryLabels(data.categoryLabels ?? {});
     } catch {
       setLoadError("Failed to load tools");
       toast("Failed to load tools", "error");
@@ -174,7 +178,7 @@ export function AdminTools({ user }: { user: SessionUser }) {
   async function toggleFeatured(tool: AdminTool) {
     const next = !tool.featured;
     if (tool.featured && tool.published && !next) {
-      if (!confirm(`Remove "${tool.name}" from featured? It will no longer appear in featured sections.`)) return;
+      if (!confirm(`Remove "${tool.name}" from featured?`)) return;
     }
     await toggleField(tool.id, "featured", next);
   }
@@ -182,14 +186,14 @@ export function AdminTools({ user }: { user: SessionUser }) {
   async function togglePublished(tool: AdminTool) {
     const next = !tool.published;
     if (!next && tool.published) {
-      if (!confirm(`Unpublish "${tool.name}"? It will be hidden from the public site.`)) return;
+      if (!confirm(`Unpublish "${tool.name}"?`)) return;
     }
     await toggleField(tool.id, "published", next);
   }
 
   function getWarning(tool: AdminTool): string | null {
     if (tool.affiliate?.status === "ACTIVE" && !tool.affiliateUrl)
-      return "ACTIVE affiliate but no tracking URL";
+      return "Active affiliate, no tracking URL";
     if (tool.published && !tool.affiliateUrl) return "Published without affiliate URL";
     return null;
   }
@@ -203,6 +207,14 @@ export function AdminTools({ user }: { user: SessionUser }) {
     if (value === "published") return tabCounts.published;
     if (value === "draft") return tabCounts.draft;
     return tabCounts.all;
+  }
+
+  function clearFilters() {
+    setSearchInput("");
+    setSearch("");
+    setCategory("");
+    setAffiliateFilter("");
+    router.replace("/admin/tools", { scroll: false });
   }
 
   const listLabel =
@@ -230,187 +242,193 @@ export function AdminTools({ user }: { user: SessionUser }) {
       <AdminPageHeader
         hideTitle
         title="Tools"
-        description={`${total} ${listLabel ? `${listLabel} ` : ""}tool${total === 1 ? "" : "s"}${total !== tools.length ? ` · showing ${tools.length} on this page` : ""}`}
+        description={`${total} ${listLabel ? `${listLabel} ` : ""}tool${total === 1 ? "" : "s"}`}
         action={
           <Link href="/admin/tools/new" className="admin-btn-primary">
-            + Add tool
+            Add tool
           </Link>
         }
       />
 
-      <div className="flex flex-wrap gap-2">
-        {PUBLISH_TABS.map((tab) => {
-          const active = publishedFilter === tab.value;
-          const count = tabCount(tab.value);
-          return (
-            <button
-              key={tab.label}
-              type="button"
-              onClick={() => setPublishTab(tab.value)}
-              className={`inline-flex items-center gap-2 rounded-lg border px-3.5 py-2 text-[13px] font-medium transition ${
-                active
-                  ? "border-border-hover bg-white text-ink"
-                  : "border-dark-border bg-dark-elevated text-muted hover:border-border-hover hover:text-white"
-              }`}
-            >
-              {tab.label}
-              <span
-                className={`rounded-md px-1.5 py-0.5 text-[11px] tabular-nums ${
-                  active ? "bg-ink/10 text-ink" : "bg-dark text-muted-dim"
-                }`}
+      <div className="admin-card overflow-hidden">
+        <div className="flex flex-col gap-4 border-b border-dark-border p-4 sm:p-5">
+          <div className="admin-segmented w-fit max-w-full overflow-x-auto">
+            {PUBLISH_TABS.map((tab) => {
+              const active = publishedFilter === tab.value;
+              return (
+                <button
+                  key={tab.label}
+                  type="button"
+                  onClick={() => setPublishTab(tab.value)}
+                  className={`admin-segmented-btn whitespace-nowrap ${active ? "admin-segmented-btn-active" : ""}`}
+                >
+                  {tab.label}
+                  <span className="ml-1.5 tabular-nums opacity-70">{tabCount(tab.value)}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="flex flex-col gap-2 lg:flex-row">
+            <div className="relative min-w-0 flex-1">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-dim"
+                strokeWidth={1.75}
+              />
+              <input
+                value={searchInput}
+                onChange={(e) => setSearchInput(e.target.value)}
+                placeholder="Search tools…"
+                className="w-full rounded-lg border border-dark-border bg-dark py-2 pl-9 pr-3 text-sm text-white placeholder:text-muted-dim focus:border-neon/40 focus:outline-none"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <select
+                value={category}
+                onChange={(e) => {
+                  setCategory(e.target.value);
+                  syncParams({ category: e.target.value, page: "" });
+                }}
+                className="min-w-[9rem] flex-1 rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:flex-none"
               >
-                {count}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="grid gap-3 rounded-xl border border-dark-border bg-dark-elevated p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <input
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search tools..."
-          className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white focus:border-neon/50 focus:outline-none sm:col-span-2"
-        />
-        <select
-          value={category}
-          onChange={(e) => {
-            setCategory(e.target.value);
-            syncParams({ category: e.target.value, page: "" });
-          }}
-          className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white"
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <select
-          value={affiliateFilter}
-          onChange={(e) => {
-            setAffiliateFilter(e.target.value);
-            syncParams({ affiliateFilter: e.target.value, page: "" });
-          }}
-          className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white"
-        >
-          <option value="">All affiliate states</option>
-          <option value="has">Has tracking URL</option>
-          <option value="missing">Published, no URL</option>
-          <option value="crm-active-no-url">ACTIVE CRM, no URL</option>
-        </select>
-        <select
-          value={sort}
-          onChange={(e) => {
-            const v = e.target.value as SortKey;
-            setSort(v);
-            syncParams({ sort: v, page: "" });
-          }}
-          className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:col-span-2 lg:col-span-1"
-        >
-          <option value="name">Sort: name</option>
-          <option value="clicks">Sort: clicks</option>
-          <option value="updated">Sort: last updated</option>
-        </select>
-      </div>
-
-      {tools.length === 0 ? (
-        <div className="admin-card admin-card-pad text-center">
-          <p className="text-muted">
-            {publishedFilter === "draft"
-              ? "No draft tools match your filters."
-              : publishedFilter === "published"
-                ? "No published tools match your filters."
-                : "No tools match your filters."}
-          </p>
-          <button
-            onClick={() => {
-              setSearchInput("");
-              setSearch("");
-              setCategory("");
-              setPublishedFilter("");
-              setAffiliateFilter("");
-              router.replace("/admin/tools", { scroll: false });
-            }}
-            className="admin-link-accent mt-3"
-          >
-            Clear filters
-          </button>
+                <option value="">All categories</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>
+                    {getCategoryLabel(c, categoryLabels)}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={affiliateFilter}
+                onChange={(e) => {
+                  setAffiliateFilter(e.target.value);
+                  syncParams({ affiliateFilter: e.target.value, page: "" });
+                }}
+                className="min-w-[9rem] flex-1 rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:flex-none"
+              >
+                <option value="">All affiliate states</option>
+                <option value="has">Has tracking URL</option>
+                <option value="missing">Published, no URL</option>
+                <option value="crm-active-no-url">Active CRM, no URL</option>
+              </select>
+              <select
+                value={sort}
+                onChange={(e) => {
+                  const v = e.target.value as SortKey;
+                  setSort(v);
+                  syncParams({ sort: v, page: "" });
+                }}
+                className="min-w-[9rem] flex-1 rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:flex-none"
+              >
+                <option value="name">Name</option>
+                <option value="clicks">Clicks</option>
+                <option value="updated">Updated</option>
+              </select>
+            </div>
+          </div>
         </div>
-      ) : (
-        <>
-          <div className="overflow-hidden rounded-2xl border border-dark-border bg-dark-elevated">
+
+        {tools.length === 0 ? (
+          <div className="px-4 py-16 text-center sm:px-5">
+            <p className="text-sm text-muted">No tools match your filters.</p>
+            {(search || category || affiliateFilter) && (
+              <button type="button" onClick={clearFilters} className="admin-link-accent mt-3">
+                Clear filters
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="admin-table min-w-[720px]">
                 <thead>
-                  <tr className="border-b border-dark-border text-left text-muted">
-                    <th className="px-4 py-3 font-medium">Name</th>
-                    <th className="px-4 py-3 font-medium">Category</th>
-                    <th className="px-4 py-3 font-medium">Clicks</th>
-                    <th className="px-4 py-3 font-medium">Featured</th>
-                    <th className="px-4 py-3 font-medium">Published</th>
-                    <th className="px-4 py-3 font-medium">Affiliate</th>
-                    <th className="px-4 py-3 font-medium">Actions</th>
+                  <tr>
+                    <th>Tool</th>
+                    <th className="hidden md:table-cell">Category</th>
+                    <th className="text-right">Clicks</th>
+                    <th>Live</th>
+                    <th className="hidden sm:table-cell">Featured</th>
+                    <th className="hidden lg:table-cell">Affiliate</th>
+                    <th className="w-12" aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
                   {tools.map((tool) => {
                     const warning = getWarning(tool);
+                    const clicks = tool._count?.clicks ?? 0;
+
                     return (
-                      <tr
-                        key={tool.id}
-                        className="border-b border-dark-border/50 last:border-0 hover:bg-dark/50"
-                      >
-                        <td className="px-4 py-3">
-                          <Link href={`/admin/tools/${tool.id}`} className="block font-medium hover:text-neon">
-                            {tool.name}
-                          </Link>
-                          <div className="text-xs text-muted">/tools/{tool.slug}</div>
-                          {warning && (
-                            <Link
-                              href={getWarningLink(tool)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="mt-1 inline-block rounded-full bg-amber-500/10 px-2 py-0.5 text-xs text-amber-400 hover:bg-amber-500/20"
-                            >
-                              {warning} →
-                            </Link>
-                          )}
+                      <tr key={tool.id}>
+                        <td className="min-w-[12rem]">
+                          <div className="flex items-center gap-3">
+                            {tool.logoUrl && (
+                              <img
+                                src={tool.logoUrl}
+                                alt=""
+                                className="h-9 w-9 shrink-0 rounded-lg border border-dark-border bg-dark object-contain p-1"
+                              />
+                            )}
+                            <div className="min-w-0">
+                              <Link
+                                href={`/admin/tools/${tool.id}`}
+                                className="block truncate font-medium text-white hover:text-neon"
+                              >
+                                {tool.name}
+                              </Link>
+                              <p className="truncate font-mono text-[11px] text-muted-dim">
+                                /{tool.slug}
+                              </p>
+                              <p className="truncate text-[11px] text-muted md:hidden">
+                                {getCategoryLabel(tool.category, categoryLabels)}
+                              </p>
+                              {warning && (
+                                <Link
+                                  href={getWarningLink(tool)}
+                                  className="mt-1 block text-[11px] text-amber-400 hover:underline"
+                                >
+                                  {warning}
+                                </Link>
+                              )}
+                            </div>
+                          </div>
                         </td>
-                        <td className="px-4 py-3 capitalize text-muted">{tool.category}</td>
-                        <td className="px-4 py-3 font-semibold text-neon">{tool._count?.clicks ?? 0}</td>
-                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <td className="hidden text-muted md:table-cell">
+                          {getCategoryLabel(tool.category, categoryLabels)}
+                        </td>
+                        <td className="text-right font-medium tabular-nums text-white">
+                          {clicks.toLocaleString()}
+                        </td>
+                        <td>
                           {isAdmin ? (
                             <button
-                              onClick={() => toggleFeatured(tool)}
-                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                tool.featured ? "bg-neon/10 text-neon" : "border border-dark-border text-muted"
-                              }`}
-                            >
-                              {tool.featured ? "Yes" : "No"}
-                            </button>
-                          ) : (
-                            <span className={`text-xs ${tool.featured ? "text-neon" : "text-muted"}`}>
-                              {tool.featured ? "Yes" : "No"}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                          {isAdmin ? (
-                            <button
+                              type="button"
                               onClick={() => togglePublished(tool)}
-                              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                                tool.published ? "bg-neon/10 text-neon" : "border border-dark-border text-muted"
-                              }`}
+                              className={`admin-toggle ${tool.published ? "admin-toggle-on-emerald" : ""}`}
                             >
-                              {tool.published ? "Live" : "Hidden"}
+                              {tool.published ? "Yes" : "No"}
                             </button>
                           ) : (
-                            <span className={`text-xs ${tool.published ? "text-neon" : "text-muted"}`}>
-                              {tool.published ? "Live" : "Hidden"}
+                            <span className={tool.published ? "text-emerald-400" : "text-muted"}>
+                              {tool.published ? "Yes" : "No"}
                             </span>
                           )}
                         </td>
-                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                        <td className="hidden sm:table-cell">
+                          {isAdmin ? (
+                            <button
+                              type="button"
+                              onClick={() => toggleFeatured(tool)}
+                              className={`admin-toggle ${tool.featured ? "admin-toggle-on" : ""}`}
+                            >
+                              {tool.featured ? "Yes" : "No"}
+                            </button>
+                          ) : (
+                            <span className={tool.featured ? "text-neon" : "text-muted"}>
+                              {tool.featured ? "Yes" : "No"}
+                            </span>
+                          )}
+                        </td>
+                        <td className="hidden lg:table-cell">
                           {tool.affiliate ? (
                             <Link
                               href={`/admin/affiliates/${tool.affiliate.id}`}
@@ -421,34 +439,17 @@ export function AdminTools({ user }: { user: SessionUser }) {
                           ) : (
                             <Link
                               href={`/admin/affiliates?action=create&companyName=${encodeURIComponent(tool.name)}&toolId=${tool.id}&website=${encodeURIComponent(tool.url)}`}
-                              className="text-xs text-muted hover:text-neon"
-                              onClick={(e) => e.stopPropagation()}
+                              className="text-xs text-muted hover:text-white"
                             >
-                              Create in CRM →
+                              Add to CRM
                             </Link>
                           )}
                           {tool.affiliateUrl && (
-                            <span className="ml-2 text-xs text-neon">· Tracking</span>
+                            <span className="mt-0.5 block text-[11px] text-muted-dim">Tracking set</span>
                           )}
                         </td>
-                        <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex gap-2">
-                            <Link
-                              href={`/admin/tools/${tool.id}`}
-                              className="text-xs text-neon hover:underline"
-                            >
-                              Edit
-                            </Link>
-                            {tool.published && (
-                              <Link
-                                href={`/tools/${tool.slug}`}
-                                target="_blank"
-                                className="text-xs text-muted hover:text-white"
-                              >
-                                Preview
-                              </Link>
-                            )}
-                          </div>
+                        <td className="w-12 text-right">
+                          <ToolRowActions tool={tool} />
                         </td>
                       </tr>
                     );
@@ -456,29 +457,105 @@ export function AdminTools({ user }: { user: SessionUser }) {
                 </tbody>
               </table>
             </div>
-          </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 text-sm text-muted">
-              <span>
-                Page {page} of {totalPages}
-              </span>
-              <button
-                disabled={page <= 1}
-                onClick={() => syncParams({ page: String(page - 1) })}
-                className="rounded-lg border border-dark-border px-3 py-1 text-sm disabled:opacity-40"
-              >
-                Previous
-              </button>
-              <button
-                disabled={page >= totalPages}
-                onClick={() => syncParams({ page: String(page + 1) })}
-                className="rounded-lg border border-dark-border px-3 py-1 text-sm disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
+
+            {totalPages > 1 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-dark-border px-4 py-3 text-sm text-muted sm:px-5">
+                <span>
+                  Page {page} of {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => syncParams({ page: String(page - 1) })}
+                    className="admin-toolbar-btn disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => syncParams({ page: String(page + 1) })}
+                    className="admin-toolbar-btn disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ToolRowActions({ tool }: { tool: AdminTool }) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    function onPointerDown(event: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mousedown", onPointerDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative inline-flex justify-end">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="admin-icon-btn h-8 w-8"
+        aria-label={`Actions for ${tool.name}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[10.5rem] py-1"
+        >
+          <Link
+            href={`/admin/tools/${tool.id}`}
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="admin-menu-item"
+          >
+            <Pencil className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+            Edit tool
+          </Link>
+          {tool.published && (
+            <Link
+              href={`/tools/${tool.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="admin-menu-item"
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+              View on site
+            </Link>
           )}
-        </>
+        </div>
       )}
     </div>
   );

@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { ExternalLink, MoreVertical, Pencil, Search, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { useToast } from "@/components/admin/Toast";
 import { formatBlogDate } from "@/lib/blog";
@@ -10,20 +12,48 @@ import type { BlogPostListItem } from "@/types/blog";
 
 const PAGE_SIZE = 25;
 
+type PublishTab = "" | "published" | "draft";
+
+const PUBLISH_TABS: { value: PublishTab; label: string }[] = [
+  { value: "", label: "All" },
+  { value: "published", label: "Published" },
+  { value: "draft", label: "Drafts" },
+];
+
+function publishedParam(tab: PublishTab): string {
+  if (tab === "published") return "true";
+  if (tab === "draft") return "false";
+  return "";
+}
+
+function tabFromParam(value: string | null): PublishTab {
+  if (value === "true") return "published";
+  if (value === "false") return "draft";
+  return "";
+}
+
 export function AdminBlog() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const [posts, setPosts] = useState<BlogPostListItem[]>([]);
   const [total, setTotal] = useState(0);
+  const [tabCounts, setTabCounts] = useState({ all: 0, published: 0, draft: 0 });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [searchInput, setSearchInput] = useState(searchParams.get("search") ?? "");
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
-  const [publishedFilter, setPublishedFilter] = useState(
-    searchParams.get("published") ?? ""
+  const [publishedFilter, setPublishedFilter] = useState<PublishTab>(
+    tabFromParam(searchParams.get("published"))
   );
   const page = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    setSearchInput(searchParams.get("search") ?? "");
+    setSearch(searchParams.get("search") ?? "");
+    setPublishedFilter(tabFromParam(searchParams.get("published")));
+  }, [searchParams]);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -39,7 +69,7 @@ export function AdminBlog() {
     const params = new URLSearchParams(searchParams.toString());
     const merged = {
       search,
-      published: publishedFilter,
+      published: publishedParam(publishedFilter),
       page: String(page),
       ...updates,
     };
@@ -52,6 +82,7 @@ export function AdminBlog() {
 
   const loadPosts = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     const params = new URLSearchParams(searchParams.toString());
     params.set("pageSize", String(PAGE_SIZE));
     try {
@@ -60,7 +91,9 @@ export function AdminBlog() {
       const data = await res.json();
       setPosts(data.items ?? []);
       setTotal(data.total ?? 0);
+      setTabCounts(data.counts ?? { all: data.total ?? 0, published: 0, draft: 0 });
     } catch {
+      setLoadError("Could not load blog posts");
       toast("Could not load blog posts", "error");
     } finally {
       setLoading(false);
@@ -82,130 +115,297 @@ export function AdminBlog() {
     loadPosts();
   }
 
+  function setPublishTab(value: PublishTab) {
+    setPublishedFilter(value);
+    syncParams({ published: publishedParam(value), page: "" });
+  }
+
+  function tabCount(value: PublishTab): number {
+    if (value === "published") return tabCounts.published;
+    if (value === "draft") return tabCounts.draft;
+    return tabCounts.all;
+  }
+
+  function clearFilters() {
+    setSearchInput("");
+    setSearch("");
+    setPublishedFilter("");
+    router.replace("/admin/blog", { scroll: false });
+  }
+
+  const listLabel =
+    publishedFilter === "published"
+      ? "published"
+      : publishedFilter === "draft"
+        ? "draft"
+        : "";
+
+  if (loading && posts.length === 0) return <AdminSkeleton rows={6} />;
+
+  if (loadError && posts.length === 0) {
+    return (
+      <div className="rounded-2xl border border-red-500/30 p-6 text-center text-red-400">
+        {loadError}
+        <button onClick={loadPosts} className="mt-2 block w-full text-sm text-neon">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div>
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-white">Blog</h1>
-          <p className="mt-1 text-sm text-muted">
-            Write and publish articles about websites, apps, and digital tools.
-          </p>
+    <div className="space-y-6">
+      <AdminPageHeader
+        hideTitle
+        title="Blog"
+        description={`${tabCounts.all} ${listLabel ? `${listLabel} ` : ""}post${tabCounts.all === 1 ? "" : "s"}`}
+        action={
+          <Link href="/admin/blog/new" className="admin-btn-primary">
+            New post
+          </Link>
+        }
+      />
+
+      <div className="admin-card overflow-hidden">
+        <div className="flex flex-col gap-4 border-b border-dark-border p-4 sm:p-5">
+          <div className="admin-segmented w-fit max-w-full overflow-x-auto">
+            {PUBLISH_TABS.map((tab) => {
+              const active = publishedFilter === tab.value;
+              return (
+                <button
+                  key={tab.label}
+                  type="button"
+                  onClick={() => setPublishTab(tab.value)}
+                  className={`admin-segmented-btn whitespace-nowrap ${active ? "admin-segmented-btn-active" : ""}`}
+                >
+                  {tab.label}
+                  <span className="ml-1.5 tabular-nums opacity-70">{tabCount(tab.value)}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="relative min-w-0">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-dim"
+              strokeWidth={1.75}
+            />
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search posts…"
+              className="w-full rounded-lg border border-dark-border bg-dark py-2 pl-9 pr-3 text-sm text-white placeholder:text-muted-dim focus:border-neon/40 focus:outline-none"
+            />
+          </div>
         </div>
-        <Link href="/admin/blog/new" className="btn-primary">
-          New post
-        </Link>
-      </div>
 
-      <div className="mb-4 flex flex-col gap-3 sm:flex-row">
-        <input
-          type="search"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search posts…"
-          className="surface w-full rounded-lg px-4 py-2.5 text-sm text-white placeholder:text-muted-dim focus:border-white/20 focus:outline-none sm:max-w-xs"
-        />
-        <select
-          value={publishedFilter}
-          onChange={(e) => {
-            setPublishedFilter(e.target.value);
-            syncParams({ published: e.target.value, page: "" });
-          }}
-          className="surface rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none"
-        >
-          <option value="">All statuses</option>
-          <option value="true">Published</option>
-          <option value="false">Draft</option>
-        </select>
-      </div>
-
-      {loading ? (
-        <AdminSkeleton rows={5} />
-      ) : posts.length === 0 ? (
-        <p className="text-sm text-muted">No blog posts found.</p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-dark-border">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead className="border-b border-dark-border bg-dark-elevated text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Title</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Published</th>
-                <th className="px-4 py-3 font-medium">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {posts.map((post) => (
-                <tr key={post.id} className="border-b border-dark-border/60 last:border-0">
-                  <td className="px-4 py-3">
-                    <p className="font-medium text-white">{post.title}</p>
-                    <p className="text-xs text-muted-dim">/blog/{post.slug}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`text-xs ${
-                        post.published ? "text-neon" : "text-muted"
-                      }`}
-                    >
-                      {post.published ? "Published" : "Draft"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted">
-                    {formatBlogDate(post.publishedAt) ?? "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-3">
-                      <Link
-                        href={`/admin/blog/${post.id}`}
-                        className="text-neon hover:underline"
-                      >
-                        Edit
-                      </Link>
-                      {post.published && (
-                        <a
-                          href={`/blog/${post.slug}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-muted hover:text-white"
+        {posts.length === 0 ? (
+          <div className="px-4 py-16 text-center sm:px-5">
+            <p className="text-sm text-muted">
+              {publishedFilter === "draft"
+                ? "No draft posts match your filters."
+                : publishedFilter === "published"
+                  ? "No published posts match your filters."
+                  : search
+                    ? "No posts match your search."
+                    : "No blog posts yet."}
+            </p>
+            {search || publishedFilter ? (
+              <button type="button" onClick={clearFilters} className="admin-link-accent mt-3">
+                Clear filters
+              </button>
+            ) : (
+              <Link href="/admin/blog/new" className="admin-link-accent mt-3 inline-block">
+                Write your first post
+              </Link>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="admin-table min-w-[680px]">
+                <thead>
+                  <tr>
+                    <th>Post</th>
+                    <th className="hidden md:table-cell">Author</th>
+                    <th className="hidden sm:table-cell">Published</th>
+                    <th>Live</th>
+                    <th className="w-12" aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {posts.map((post) => (
+                    <tr key={post.id}>
+                      <td className="min-w-[14rem]">
+                        <div className="flex items-start gap-3">
+                          {post.coverImage ? (
+                            <img
+                              src={post.coverImage}
+                              alt=""
+                              className="h-10 w-14 shrink-0 rounded-lg border border-dark-border bg-dark object-cover"
+                            />
+                          ) : null}
+                          <div className="min-w-0">
+                            <Link
+                              href={`/admin/blog/${post.id}`}
+                              className="block truncate font-medium text-white hover:text-neon"
+                            >
+                              {post.title}
+                            </Link>
+                            <p className="truncate font-mono text-[11px] text-muted-dim">
+                              /blog/{post.slug}
+                            </p>
+                            {post.excerpt && (
+                              <p className="mt-1 line-clamp-1 text-[11px] text-muted">
+                                {post.excerpt}
+                              </p>
+                            )}
+                            <p className="mt-1 text-[11px] text-muted sm:hidden">
+                              {formatBlogDate(post.publishedAt) ?? "Not published"}
+                              {post.authorName ? ` · ${post.authorName}` : ""}
+                            </p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="hidden text-muted md:table-cell">
+                        {post.authorName ?? "—"}
+                      </td>
+                      <td className="hidden text-muted sm:table-cell">
+                        {formatBlogDate(post.publishedAt) ?? "—"}
+                      </td>
+                      <td>
+                        <span
+                          className={`admin-toggle ${post.published ? "admin-toggle-on-emerald" : ""}`}
                         >
-                          View
-                        </a>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(post.id, post.title)}
-                        className="text-red-400 hover:underline"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+                          {post.published ? "Yes" : "No"}
+                        </span>
+                      </td>
+                      <td className="w-12 text-right">
+                        <BlogRowActions
+                          post={post}
+                          onDelete={() => void handleDelete(post.id, post.title)}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-      {totalPages > 1 && (
-        <div className="mt-4 flex items-center gap-3 text-sm text-muted">
+            {totalPages > 1 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-dark-border px-4 py-3 text-sm text-muted sm:px-5">
+                <span>
+                  Page {page} of {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => syncParams({ page: String(page - 1) })}
+                    className="admin-toolbar-btn disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => syncParams({ page: String(page + 1) })}
+                    className="admin-toolbar-btn disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function BlogRowActions({
+  post,
+  onDelete,
+}: {
+  post: BlogPostListItem;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    function onPointerDown(event: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mousedown", onPointerDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative inline-flex justify-end">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="admin-icon-btn h-8 w-8"
+        aria-label={`Actions for ${post.title}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[10.5rem] py-1"
+        >
+          <Link
+            href={`/admin/blog/${post.id}`}
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="admin-menu-item"
+          >
+            <Pencil className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+            Edit post
+          </Link>
+          {post.published && (
+            <Link
+              href={`/blog/${post.slug}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="admin-menu-item"
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+              View on site
+            </Link>
+          )}
           <button
             type="button"
-            disabled={page <= 1}
-            onClick={() => syncParams({ page: String(page - 1) })}
-            className="disabled:opacity-40"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onDelete();
+            }}
+            className="admin-menu-item w-full text-left text-red-400 hover:text-red-300"
           >
-            Previous
-          </button>
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <button
-            type="button"
-            disabled={page >= totalPages}
-            onClick={() => syncParams({ page: String(page + 1) })}
-            className="disabled:opacity-40"
-          >
-            Next
+            <Trash2 className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+            Delete
           </button>
         </div>
       )}

@@ -38,7 +38,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ ids: rows.map((r) => r.id), total: rows.length });
     }
 
-    const [items, total, categoryRows] = await Promise.all([
+    const [items, total, categoryRows, allCount, activeCount, appliedCount, inProgressCount, pendingCount] =
+      await Promise.all([
       prisma.affiliateProgram.findMany({
         where,
         include: affiliateInclude,
@@ -53,6 +54,21 @@ export async function GET(request: NextRequest) {
         where: { category: { not: null } },
         _count: true,
       }),
+      prisma.affiliateProgram.count({
+        where: buildAffiliateWhere({ ...filters, status: null }),
+      }),
+      prisma.affiliateProgram.count({
+        where: buildAffiliateWhere({ ...filters, status: "ACTIVE" }),
+      }),
+      prisma.affiliateProgram.count({
+        where: buildAffiliateWhere({ ...filters, status: "APPLIED" }),
+      }),
+      prisma.affiliateProgram.count({
+        where: buildAffiliateWhere({ ...filters, status: "IN_PROGRESS" }),
+      }),
+      prisma.affiliateProgram.count({
+        where: buildAffiliateWhere({ ...filters, status: "PENDING" }),
+      }),
     ]);
 
     const categories = categoryRows
@@ -60,7 +76,21 @@ export async function GET(request: NextRequest) {
       .filter((c): c is string => !!c)
       .sort();
 
-    return NextResponse.json({ items, total, page, pageSize, categories, view });
+    return NextResponse.json({
+      items,
+      total,
+      page,
+      pageSize,
+      categories,
+      view,
+      counts: {
+        all: allCount,
+        ACTIVE: activeCount,
+        APPLIED: appliedCount,
+        IN_PROGRESS: inProgressCount,
+        PENDING: pendingCount,
+      },
+    });
   } catch (error) {
     return handleAuthError(error, "Failed to load programs");
   }

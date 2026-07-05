@@ -1,6 +1,37 @@
 const appUrl = () =>
   (process.env.NEXT_PUBLIC_APP_URL ?? "https://toolqz.com").replace(/\/$/, "");
 
+export function adminPasswordResetEmail(name: string, token: string) {
+  const resetUrl = `${appUrl()}/admin/reset-password?token=${encodeURIComponent(token)}`;
+  const text = [
+    `Hi ${name},`,
+    "",
+    "We received a request to reset your TOOLQZ admin password.",
+    "",
+    `Reset your password (link expires in 1 hour):`,
+    resetUrl,
+    "",
+    "If you didn't request this, you can ignore this email. Your password won't change.",
+    "",
+    "— The TOOLQZ team",
+  ].join("\n");
+
+  const html = `
+    <p>Hi ${escapeHtml(name)},</p>
+    <p>We received a request to reset your <strong>TOOLQZ</strong> admin password.</p>
+    <p><a href="${resetUrl}">Reset your password</a> — this link expires in 1 hour.</p>
+    <p style="color:#888;font-size:13px">If you didn't request this, you can ignore this email. Your password won't change.</p>
+    <p>— The TOOLQZ team</p>
+  `.trim();
+
+  return {
+    subject: "Reset your TOOLQZ admin password",
+    text,
+    html,
+    resetUrl,
+  };
+}
+
 export function welcomeNewsletterEmail(name: string | null) {
   const greeting = name ? `Hi ${name},` : "Hi there,";
   const text = [

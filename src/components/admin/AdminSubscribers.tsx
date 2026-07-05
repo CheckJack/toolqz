@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Mail, MoreVertical, Search, Trash2, Upload, UserMinus, UserPlus } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { useToast } from "@/components/admin/Toast";
 import { parseCsv } from "@/lib/csv-parse";
@@ -8,6 +10,17 @@ import { parseSubscriberImportRow } from "@/lib/subscribers";
 import { NewsletterSubscriber, SubscriberImportRow } from "@/types/subscriber";
 
 const PAGE_SIZE = 25;
+
+type StatusTab = "ALL" | "ACTIVE" | "UNSUBSCRIBED";
+
+const STATUS_TABS: { value: StatusTab; label: string }[] = [
+  { value: "ALL", label: "All" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "UNSUBSCRIBED", label: "Unsubscribed" },
+];
+
+const inputClass =
+  "w-full rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white placeholder:text-muted-dim focus:border-neon/40 focus:outline-none";
 
 function parseImportCsv(text: string): SubscriberImportRow[] {
   const rows = parseCsv(text.trim());
@@ -19,17 +32,25 @@ function parseImportCsv(text: string): SubscriberImportRow[] {
     .filter((row): row is SubscriberImportRow => row !== null);
 }
 
+function formatSource(source: string) {
+  if (source === "popup") return "Popup";
+  if (source === "manual") return "Manual";
+  if (source === "import") return "Import";
+  return source.charAt(0).toUpperCase() + source.slice(1);
+}
+
 export function AdminSubscribers() {
   const { toast } = useToast();
   const [items, setItems] = useState<NewsletterSubscriber[]>([]);
   const [total, setTotal] = useState(0);
-  const [activeCount, setActiveCount] = useState(0);
+  const [tabCounts, setTabCounts] = useState({ all: 0, ACTIVE: 0, UNSUBSCRIBED: 0 });
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [status, setStatus] = useState("ALL");
+  const [status, setStatus] = useState<StatusTab>("ALL");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showImport, setShowImport] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -41,12 +62,19 @@ export function AdminSubscribers() {
   const [addLoading, setAddLoading] = useState(false);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 300);
+    const timer = window.setTimeout(() => {
+      if (searchInput.trim() !== search) {
+        setSearch(searchInput.trim());
+        setPage(1);
+        setSelected(new Set());
+      }
+    }, 300);
     return () => window.clearTimeout(timer);
-  }, [searchInput]);
+  }, [searchInput, search]);
 
   const load = useCallback(() => {
     setLoading(true);
+    setLoadError("");
     const params = new URLSearchParams({
       page: String(page),
       pageSize: String(PAGE_SIZE),
@@ -62,10 +90,19 @@ export function AdminSubscribers() {
       .then((data) => {
         setItems(data.items ?? []);
         setTotal(data.total ?? 0);
-        setActiveCount(data.activeCount ?? 0);
+        setTabCounts(
+          data.counts ?? {
+            all: data.total ?? 0,
+            ACTIVE: data.activeCount ?? 0,
+            UNSUBSCRIBED: 0,
+          }
+        );
         setTotalPages(data.totalPages ?? 1);
       })
-      .catch(() => toast("Failed to load mailing list", "error"))
+      .catch(() => {
+        setLoadError("Could not load mailing list");
+        toast("Failed to load mailing list", "error");
+      })
       .finally(() => setLoading(false));
   }, [page, search, status, toast]);
 
@@ -76,10 +113,27 @@ export function AdminSubscribers() {
   useEffect(() => {
     setPage(1);
     setSelected(new Set());
-  }, [search, status]);
+  }, [status]);
 
   const importPreview = useMemo(() => parseImportCsv(importText).slice(0, 5), [importText]);
   const importTotal = useMemo(() => parseImportCsv(importText).length, [importText]);
+
+  function tabCount(value: StatusTab): number {
+    if (value === "ACTIVE") return tabCounts.ACTIVE;
+    if (value === "UNSUBSCRIBED") return tabCounts.UNSUBSCRIBED;
+    return tabCounts.all;
+  }
+
+  function onStatusChange(value: StatusTab) {
+    setStatus(value);
+  }
+
+  function clearFilters() {
+    setSearchInput("");
+    setSearch("");
+    setStatus("ALL");
+    setPage(1);
+  }
 
   function toggleSelect(id: string) {
     setSelected((prev) => {
@@ -207,169 +261,246 @@ export function AdminSubscribers() {
     reader.readAsText(file);
   }
 
-  if (loading && !items.length) return <AdminSkeleton rows={8} />;
+  function closeImportModal() {
+    setShowImport(false);
+    setImportText("");
+    setImportResult(null);
+  }
+
+  const listLabel =
+    status === "ACTIVE" ? "active" : status === "UNSUBSCRIBED" ? "unsubscribed" : "";
+
+  const description =
+    tabCounts.ACTIVE > 0
+      ? `${tabCounts.ACTIVE} active · ${tabCounts.all} total`
+      : tabCounts.all > 0
+        ? `${tabCounts.all} subscriber${tabCounts.all === 1 ? "" : "s"}`
+        : "Sign-ups from the popup and imports";
+
+  if (loading && items.length === 0 && !loadError) return <AdminSkeleton rows={8} />;
+
+  if (loadError && items.length === 0) {
+    return (
+      <div className="rounded-2xl border border-red-500/30 p-6 text-center text-red-400">
+        {loadError}
+        <button type="button" onClick={load} className="admin-link-accent mt-2">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Mailing list</h1>
-          <p className="mt-1 text-sm text-muted">
-            {activeCount} active · {total} total subscribers from the popup and imports
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setShowAdd(true)}
-            className="rounded-xl bg-neon px-4 py-2 text-sm font-semibold text-ink"
-          >
-            Add subscriber
-          </button>
-          <button
-            onClick={() => setShowImport(true)}
-            className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted hover:text-white"
-          >
-            Import
-          </button>
-          <button
-            onClick={() => exportCsv(selected.size ? [...selected] : undefined)}
-            className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted hover:text-white"
-          >
-            Export{selected.size ? ` (${selected.size})` : " all"}
-          </button>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <input
-          type="search"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search by name or email…"
-          className="flex-1 rounded-xl border border-dark-border bg-dark px-4 py-2.5 text-sm text-white placeholder:text-muted/60"
-        />
-        <select
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          className="rounded-xl border border-dark-border bg-dark px-4 py-2.5 text-sm text-white"
-        >
-          <option value="ALL">All statuses</option>
-          <option value="ACTIVE">Active</option>
-          <option value="UNSUBSCRIBED">Unsubscribed</option>
-        </select>
-      </div>
-
-      <div className="overflow-hidden rounded-2xl border border-dark-border">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-dark-border bg-dark-elevated text-muted">
-            <tr>
-              <th className="px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={items.length > 0 && selected.size === items.length}
-                  onChange={toggleSelectAll}
-                  aria-label="Select all"
-                />
-              </th>
-              <th className="px-4 py-3 font-medium">Email</th>
-              <th className="hidden px-4 py-3 font-medium sm:table-cell">Name</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="hidden px-4 py-3 font-medium md:table-cell">Source</th>
-              <th className="hidden px-4 py-3 font-medium lg:table-cell">Subscribed</th>
-              <th className="px-4 py-3 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((sub) => (
-              <tr key={sub.id} className="border-b border-dark-border/60 last:border-0">
-                <td className="px-4 py-3">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(sub.id)}
-                    onChange={() => toggleSelect(sub.id)}
-                    aria-label={`Select ${sub.email}`}
-                  />
-                </td>
-                <td className="px-4 py-3 text-white">{sub.email}</td>
-                <td className="hidden px-4 py-3 text-muted sm:table-cell">{sub.name ?? "—"}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                      sub.status === "ACTIVE"
-                        ? "bg-neon/10 text-neon"
-                        : "bg-dark-border text-muted"
-                    }`}
-                  >
-                    {sub.status === "ACTIVE" ? "Active" : "Unsubscribed"}
-                  </span>
-                </td>
-                <td className="hidden px-4 py-3 capitalize text-muted md:table-cell">
-                  {sub.source}
-                </td>
-                <td className="hidden px-4 py-3 text-muted lg:table-cell">
-                  {new Date(sub.subscribedAt).toLocaleDateString()}
-                </td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-wrap gap-2">
-                    {sub.status === "ACTIVE" ? (
-                      <button
-                        onClick={() => updateStatus(sub.id, "UNSUBSCRIBED")}
-                        className="text-xs text-muted hover:text-white"
-                      >
-                        Unsubscribe
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => updateStatus(sub.id, "ACTIVE")}
-                        className="text-xs text-neon hover:underline"
-                      >
-                        Reactivate
-                      </button>
-                    )}
-                    <button
-                      onClick={() => deleteSubscriber(sub.id, sub.email)}
-                      className="text-xs text-red-400 hover:underline"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {!items.length && (
-              <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-muted">
-                  No subscribers yet. They&apos;ll appear here when someone signs up via the popup.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm text-muted">
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex gap-2">
+      <AdminPageHeader
+        hideTitle
+        title="Mailing list"
+        description={description}
+        action={
+          <div className="flex flex-wrap gap-2">
             <button
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-              className="rounded-lg border border-dark-border px-3 py-1.5 disabled:opacity-40"
+              type="button"
+              onClick={() => setShowImport(true)}
+              className="admin-toolbar-btn"
             >
-              Previous
+              <Upload className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+              Import
             </button>
             <button
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-              className="rounded-lg border border-dark-border px-3 py-1.5 disabled:opacity-40"
+              type="button"
+              onClick={() => exportCsv(selected.size ? [...selected] : undefined)}
+              className="admin-toolbar-btn"
             >
-              Next
+              Export{selected.size ? ` (${selected.size})` : ""}
+            </button>
+            <button type="button" onClick={() => setShowAdd(true)} className="admin-btn-primary">
+              Add subscriber
             </button>
           </div>
+        }
+      />
+
+      <div className="admin-card overflow-hidden">
+        <div className="flex flex-col gap-4 border-b border-dark-border p-4 sm:p-5">
+          <div className="admin-segmented w-fit max-w-full overflow-x-auto">
+            {STATUS_TABS.map((tab) => {
+              const active = status === tab.value;
+              return (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => onStatusChange(tab.value)}
+                  className={`admin-segmented-btn whitespace-nowrap ${active ? "admin-segmented-btn-active" : ""}`}
+                >
+                  {tab.label}
+                  <span className="ml-1.5 tabular-nums opacity-70">{tabCount(tab.value)}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="relative min-w-0">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-dim"
+              strokeWidth={1.75}
+            />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search by name or email…"
+              className="w-full rounded-lg border border-dark-border bg-dark py-2 pl-9 pr-3 text-sm text-white placeholder:text-muted-dim focus:border-neon/40 focus:outline-none"
+            />
+          </div>
+
+          {selected.size > 0 && (
+            <div className="flex flex-wrap items-center gap-3 text-sm text-muted">
+              <span>
+                {selected.size} selected
+              </span>
+              <button
+                type="button"
+                onClick={() => exportCsv([...selected])}
+                className="admin-link-accent"
+              >
+                Export selected
+              </button>
+              <button type="button" onClick={() => setSelected(new Set())} className="admin-link-accent">
+                Clear selection
+              </button>
+            </div>
+          )}
         </div>
-      )}
+
+        {loading ? (
+          <div className="p-4 sm:p-5">
+            <AdminSkeleton rows={5} />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="px-4 py-16 text-center sm:px-5">
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-dark-border bg-dark text-muted">
+              <Mail className="h-4 w-4" strokeWidth={1.75} />
+            </div>
+            <p className="text-sm text-muted">
+              {search || status !== "ALL"
+                ? "No subscribers match your filters."
+                : "No subscribers yet. They'll appear here when someone signs up via the popup."}
+            </p>
+            {(search || status !== "ALL") && (
+              <button type="button" onClick={clearFilters} className="admin-link-accent mt-3">
+                Clear filters
+              </button>
+            )}
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="admin-table min-w-[40rem]">
+                <thead>
+                  <tr>
+                    <th className="w-10">
+                      <input
+                        type="checkbox"
+                        checked={items.length > 0 && selected.size === items.length}
+                        onChange={toggleSelectAll}
+                        aria-label="Select all on page"
+                      />
+                    </th>
+                    <th>Subscriber</th>
+                    <th>Status</th>
+                    <th className="hidden md:table-cell">Source</th>
+                    <th className="hidden lg:table-cell">Subscribed</th>
+                    <th className="w-12" aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((sub) => (
+                    <tr key={sub.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selected.has(sub.id)}
+                          onChange={() => toggleSelect(sub.id)}
+                          aria-label={`Select ${sub.email}`}
+                        />
+                      </td>
+                      <td className="min-w-[12rem]">
+                        <p className="font-medium text-white">{sub.email}</p>
+                        <p className="mt-0.5 text-[13px] text-muted">
+                          {sub.name ?? "No name"}
+                        </p>
+                        <p className="mt-1 text-[11px] text-muted-dim md:hidden">
+                          {formatSource(sub.source)} ·{" "}
+                          {new Date(sub.subscribedAt).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })}
+                        </p>
+                      </td>
+                      <td>
+                        <span
+                          className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium ${
+                            sub.status === "ACTIVE"
+                              ? "bg-emerald-500/10 text-emerald-400"
+                              : "bg-dark-border/80 text-muted"
+                          }`}
+                        >
+                          {sub.status === "ACTIVE" ? "Active" : "Unsubscribed"}
+                        </span>
+                      </td>
+                      <td className="hidden text-muted md:table-cell">
+                        {formatSource(sub.source)}
+                      </td>
+                      <td className="hidden text-muted lg:table-cell">
+                        {new Date(sub.subscribedAt).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </td>
+                      <td className="text-right">
+                        <SubscriberRowActions
+                          subscriber={sub}
+                          onUpdateStatus={updateStatus}
+                          onDelete={deleteSubscriber}
+                        />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-dark-border px-4 py-3 text-sm text-muted sm:px-5">
+                <span>
+                  Page {page} of {totalPages}
+                  {listLabel ? ` · ${total} ${listLabel}` : total !== tabCounts.all ? ` · ${total} shown` : ""}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1 || loading}
+                    onClick={() => setPage((p) => p - 1)}
+                    className="admin-toolbar-btn disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages || loading}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="admin-toolbar-btn disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {showAdd && (
         <div
@@ -378,40 +509,42 @@ export function AdminSubscribers() {
         >
           <form
             onSubmit={handleAdd}
-            className="w-full max-w-md rounded-2xl border border-dark-border bg-dark-elevated p-6"
+            className="admin-card w-full max-w-md admin-card-pad"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="mb-4 text-lg font-semibold text-white">Add subscriber</h2>
-            <div className="space-y-3">
-              <input
-                type="email"
-                required
-                value={addEmail}
-                onChange={(e) => setAddEmail(e.target.value)}
-                placeholder="Email"
-                className="w-full rounded-xl border border-dark-border bg-dark px-4 py-2.5 text-sm text-white"
-              />
-              <input
-                type="text"
-                value={addName}
-                onChange={(e) => setAddName(e.target.value)}
-                placeholder="Name (optional)"
-                className="w-full rounded-xl border border-dark-border bg-dark px-4 py-2.5 text-sm text-white"
-              />
+            <h2 className="admin-section-title">Add subscriber</h2>
+            <div className="mt-4 space-y-3">
+              <div>
+                <label className="mb-1.5 block text-sm text-muted">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={addEmail}
+                  onChange={(e) => setAddEmail(e.target.value)}
+                  placeholder="jane@example.com"
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm text-muted">Name (optional)</label>
+                <input
+                  type="text"
+                  value={addName}
+                  onChange={(e) => setAddName(e.target.value)}
+                  placeholder="Jane Doe"
+                  className={inputClass}
+                />
+              </div>
             </div>
-            <div className="mt-4 flex gap-2">
+            <div className="mt-6 flex gap-2">
               <button
                 type="submit"
                 disabled={addLoading}
-                className="rounded-xl bg-neon px-4 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+                className="admin-btn-primary disabled:opacity-50"
               >
-                {addLoading ? "Adding…" : "Add"}
+                {addLoading ? "Adding…" : "Add subscriber"}
               </button>
-              <button
-                type="button"
-                onClick={() => setShowAdd(false)}
-                className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted"
-              >
+              <button type="button" onClick={() => setShowAdd(false)} className="admin-toolbar-btn">
                 Cancel
               </button>
             </div>
@@ -422,18 +555,14 @@ export function AdminSubscribers() {
       {showImport && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
-          onClick={() => {
-            setShowImport(false);
-            setImportText("");
-            setImportResult(null);
-          }}
+          onClick={closeImportModal}
         >
           <div
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-dark-border bg-dark-elevated p-6"
+            className="admin-card max-h-[90vh] w-full max-w-2xl overflow-y-auto admin-card-pad"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2 className="mb-2 text-lg font-semibold text-white">Import subscribers</h2>
-            <p className="mb-4 text-sm text-muted">
+            <h2 className="admin-section-title">Import subscribers</h2>
+            <p className="mt-2 text-sm text-muted">
               Upload or paste CSV with columns: Email, Name, Status (optional), Source (optional)
             </p>
             <input
@@ -443,14 +572,14 @@ export function AdminSubscribers() {
                 const file = e.target.files?.[0];
                 if (file) handleFileUpload(file);
               }}
-              className="mb-3 block w-full text-sm text-muted"
+              className="mt-4 block w-full text-sm text-muted file:mr-3 file:rounded-lg file:border file:border-dark-border file:bg-dark file:px-3 file:py-1.5 file:text-sm file:text-white"
             />
             <textarea
               value={importText}
               onChange={(e) => setImportText(e.target.value)}
               rows={8}
-              placeholder="Email,Name,Status,Source&#10;jane@example.com,Jane,ACTIVE,import"
-              className="w-full rounded-xl border border-dark-border bg-dark px-4 py-3 font-mono text-xs text-white"
+              placeholder={"Email,Name,Status,Source\njane@example.com,Jane,ACTIVE,import"}
+              className="mt-3 w-full rounded-lg border border-dark-border bg-dark px-3 py-2 font-mono text-xs text-white focus:border-neon/40 focus:outline-none"
             />
             {importTotal > 0 && (
               <p className="mt-2 text-sm text-muted">
@@ -464,26 +593,116 @@ export function AdminSubscribers() {
               </p>
             )}
             {importResult && <p className="mt-2 text-sm text-neon">{importResult}</p>}
-            <div className="mt-4 flex gap-2">
+            <div className="mt-6 flex gap-2">
               <button
-                onClick={handleImport}
+                type="button"
+                onClick={() => void handleImport()}
                 disabled={importing}
-                className="rounded-xl bg-neon px-4 py-2 text-sm font-semibold text-ink disabled:opacity-50"
+                className="admin-btn-primary disabled:opacity-50"
               >
                 {importing ? "Importing…" : "Import"}
               </button>
-              <button
-                onClick={() => {
-                  setShowImport(false);
-                  setImportText("");
-                  setImportResult(null);
-                }}
-                className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted"
-              >
+              <button type="button" onClick={closeImportModal} className="admin-toolbar-btn">
                 Close
               </button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubscriberRowActions({
+  subscriber,
+  onUpdateStatus,
+  onDelete,
+}: {
+  subscriber: NewsletterSubscriber;
+  onUpdateStatus: (id: string, status: "ACTIVE" | "UNSUBSCRIBED") => void;
+  onDelete: (id: string, email: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    function onPointerDown(event: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mousedown", onPointerDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative inline-flex justify-end">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="admin-icon-btn h-8 w-8"
+        aria-label={`Actions for ${subscriber.email}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[10.5rem] py-1"
+        >
+          {subscriber.status === "ACTIVE" ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                void onUpdateStatus(subscriber.id, "UNSUBSCRIBED");
+              }}
+              className="admin-menu-item w-full"
+            >
+              <UserMinus className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+              Unsubscribe
+            </button>
+          ) : (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                void onUpdateStatus(subscriber.id, "ACTIVE");
+              }}
+              className="admin-menu-item w-full"
+            >
+              <UserPlus className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+              Reactivate
+            </button>
+          )}
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              void onDelete(subscriber.id, subscriber.email);
+            }}
+            className="admin-menu-item w-full text-red-400 hover:text-red-300"
+          >
+            <Trash2 className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+            Delete
+          </button>
         </div>
       )}
     </div>

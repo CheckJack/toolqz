@@ -18,6 +18,7 @@ const STATIC_PAGES = [
   { id: "page-add-program", label: "Add affiliate program", href: "/admin/affiliates?action=create" },
   { id: "page-audit", label: "Audit log", href: "/admin/audit" },
   { id: "page-notifications", label: "Notifications", href: "/admin/notifications" },
+  { id: "page-settings", label: "Settings", href: "/admin/settings" },
 ];
 
 export async function GET(request: NextRequest) {

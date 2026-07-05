@@ -175,10 +175,15 @@ function AdminShellInner({
           </kbd>
         </button>
 
-        <div className="rounded-lg border border-dark-border bg-dark/40 px-3 py-2.5">
+        <Link
+          href="/admin/settings"
+          onClick={() => setSidebarOpen(false)}
+          className="block rounded-lg border border-dark-border bg-dark/40 px-3 py-2.5 transition hover:border-border-hover hover:bg-dark/60"
+        >
           <p className="truncate text-[13px] font-medium text-white">{user.name}</p>
           <p className="truncate text-[11px] text-muted-dim">{user.email}</p>
-        </div>
+          <p className="mt-1 text-[10px] text-neon">Profile settings</p>
+        </Link>
 
         <div className="grid grid-cols-2 gap-2">
           <Link
@@ -252,11 +257,11 @@ function AdminShellInner({
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-1.5">
+          <div className="flex shrink-0 items-center gap-1">
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent("admin:command-palette"))}
-              className="admin-icon-btn hidden sm:inline-flex"
+              className="admin-icon-btn"
               title="Quick jump (⌘K)"
               aria-label="Quick jump"
             >
@@ -266,7 +271,7 @@ function AdminShellInner({
             {user.role === "ADMIN" && pathname !== "/admin/agent" && (
               <Link
                 href="/admin/agent"
-                className="admin-icon-btn hidden sm:inline-flex"
+                className="admin-icon-btn"
                 title="Open assistant"
                 aria-label="Assistant"
               >

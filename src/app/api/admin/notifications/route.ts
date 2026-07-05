@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
       ...(unreadOnly ? { readAt: null } : {}),
     };
 
-    const [items, unread, total] = await Promise.all([
+    const [items, unread, total, allTotal] = await Promise.all([
       prisma.adminNotification.findMany({
         where,
         orderBy: { createdAt: "desc" },
@@ -29,12 +29,14 @@ export async function GET(request: NextRequest) {
         where: { userId: session.id, readAt: null },
       }),
       prisma.adminNotification.count({ where }),
+      prisma.adminNotification.count({ where: { userId: session.id } }),
     ]);
 
     return NextResponse.json({
       items,
       unread,
       total,
+      allTotal,
       page,
       pageSize,
       totalPages: Math.max(1, Math.ceil(total / pageSize)),

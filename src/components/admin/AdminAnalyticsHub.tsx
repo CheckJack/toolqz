@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSiteTraffic } from "@/components/admin/AdminSiteTraffic";
 
 const TABS = [
@@ -11,6 +12,8 @@ const TABS = [
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+const GA4_URL = "https://analytics.google.com/";
 
 export function AdminAnalyticsHub() {
   const router = useRouter();
@@ -25,31 +28,44 @@ export function AdminAnalyticsHub() {
     router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
   }
 
+  const description =
+    activeTab === "traffic"
+      ? "Visitors and page views from Google Analytics 4"
+      : "Outbound Visit link clicks across your tools";
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-2 border-b border-dark-border pb-4">
+      <AdminPageHeader
+        hideTitle
+        title="Analytics"
+        description={description}
+        action={
+          activeTab === "traffic" ? (
+            <Link
+              href={GA4_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="admin-toolbar-btn"
+            >
+              Open GA4
+            </Link>
+          ) : undefined
+        }
+      />
+
+      <div className="admin-segmented w-fit max-w-full overflow-x-auto">
         {TABS.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => setTab(tab.id)}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
-              activeTab === tab.id
-                ? "bg-neon/15 text-neon"
-                : "text-muted hover:bg-dark-elevated hover:text-white"
+            className={`admin-segmented-btn whitespace-nowrap ${
+              activeTab === tab.id ? "admin-segmented-btn-active" : ""
             }`}
           >
             {tab.label}
           </button>
         ))}
-        <Link
-          href="https://analytics.google.com/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="ml-auto text-sm text-muted hover:text-neon"
-        >
-          GA4 dashboard →
-        </Link>
       </div>
 
       {activeTab === "traffic" ? <AdminSiteTraffic /> : <AdminAnalytics />}

@@ -10,6 +10,7 @@ import {
   MessageSquare,
   ScrollText,
   Server,
+  Settings,
   Users,
   Wallet,
   Wrench,
@@ -67,6 +68,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     label: "Team & system",
     items: [
       { href: "/admin/team", label: "Team", icon: Users },
+      { href: "/admin/settings", label: "Settings", icon: Settings },
       { href: "/admin/hosting", label: "Hosting", icon: Server, adminOnly: true },
       { href: "/admin/audit", label: "Audit log", icon: ScrollText, adminOnly: true },
     ],
@@ -94,6 +96,7 @@ const PAGE_META: { match: (path: string) => boolean; meta: AdminPageMeta }[] = [
   { match: (p) => p.startsWith("/admin/notifications"), meta: { section: "Audience", title: "Notifications" } },
   { match: (p) => p.startsWith("/admin/subscribers"), meta: { section: "Audience", title: "Mailing list" } },
   { match: (p) => p.startsWith("/admin/team"), meta: { section: "Team & system", title: "Team" } },
+  { match: (p) => p.startsWith("/admin/settings"), meta: { section: "Team & system", title: "Settings" } },
   { match: (p) => p.startsWith("/admin/hosting"), meta: { section: "Team & system", title: "Hosting" } },
   { match: (p) => p.startsWith("/admin/audit"), meta: { section: "Team & system", title: "Audit log" } },
   { match: (p) => p.startsWith("/admin/agent"), meta: { section: "Tools", title: "Assistant" } },

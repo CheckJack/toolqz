@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { AdminAuthShell, adminAuthInputClass } from "@/components/admin/AdminAuthShell";
 
 export function AdminLoginForm() {
   const router = useRouter();
@@ -45,44 +47,44 @@ export function AdminLoginForm() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center bg-dark px-4">
-      <div className="w-full max-w-md rounded-2xl border border-dark-border bg-dark-elevated p-8">
-        <div className="mb-8 text-center">
-          <h1 className="text-2xl font-bold">
-            TOOL<span className="text-neon">QZ</span>
-          </h1>
-          <p className="mt-2 text-sm text-muted">Team admin login</p>
+    <AdminAuthShell title="Team admin login" subtitle="Sign in to manage TOOLQZ">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="mb-1.5 block text-sm text-muted">Email</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              if (error) setError("");
+            }}
+            autoComplete="email"
+            className={adminAuthInputClass}
+            required
+          />
         </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="mb-1.5 block text-sm text-muted">Email</label>
+        <div>
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <label className="text-sm text-muted">Password</label>
+            <Link
+              href="/admin/login/forgot-password"
+              className="text-[12px] text-neon hover:underline"
+            >
+              Forgot password?
+            </Link>
+          </div>
+          <div className="relative">
             <input
-              type="email"
-              value={email}
+              type={showPassword ? "text" : "password"}
+              value={password}
               onChange={(e) => {
-                setEmail(e.target.value);
+                setPassword(e.target.value);
                 if (error) setError("");
               }}
-              autoComplete="email"
-              className="w-full rounded-xl border border-dark-border bg-dark px-4 py-3 text-white focus:border-neon/50 focus:outline-none focus:ring-2 focus:ring-neon/20"
+              autoComplete="current-password"
+              className={`${adminAuthInputClass} pr-12`}
               required
             />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-sm text-muted">Password</label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => {
-                  setPassword(e.target.value);
-                  if (error) setError("");
-                }}
-                autoComplete="current-password"
-                className="w-full rounded-xl border border-dark-border bg-dark py-3 pl-4 pr-12 text-white focus:border-neon/50 focus:outline-none focus:ring-2 focus:ring-neon/20"
-                required
-              />
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
@@ -138,12 +140,7 @@ export function AdminLoginForm() {
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>
-
-          <p className="text-center text-xs text-muted">
-            Password resets are managed by your team admin. Contact them if you need access.
-          </p>
         </form>
-      </div>
-    </div>
+    </AdminAuthShell>
   );
 }

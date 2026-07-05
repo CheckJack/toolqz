@@ -2,8 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Bell, ChevronRight } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
+import { EmailReminderSetting } from "@/components/admin/EmailReminderSetting";
 import { useToast } from "@/components/admin/Toast";
 
 interface NotificationItem {
@@ -18,16 +21,47 @@ interface NotificationItem {
 
 const PAGE_SIZE = 25;
 
+type FilterTab = "all" | "unread";
+
+const FILTER_TABS: { value: FilterTab; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "unread", label: "Unread" },
+];
+
+function formatWhen(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear();
+  if (sameDay) {
+    return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  }
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function typeLabel(type: string): string | null {
+  if (type === "follow_up_due") return "Follow-up";
+  return null;
+}
+
 export function AdminNotifications() {
   const router = useRouter();
   const { toast } = useToast();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [unread, setUnread] = useState(0);
-  const [total, setTotal] = useState(0);
+  const [allTotal, setAllTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<"all" | "unread">("all");
+  const [loadError, setLoadError] = useState("");
+  const [filter, setFilter] = useState<FilterTab>("all");
   const [emailFollowUpReminders, setEmailFollowUpReminders] = useState(true);
   const [savingPrefs, setSavingPrefs] = useState(false);
 
@@ -42,22 +76,27 @@ export function AdminNotifications() {
 
   const load = useCallback(() => {
     setLoading(true);
+    setLoadError("");
     const params = new URLSearchParams({
       page: String(page),
       pageSize: String(PAGE_SIZE),
     });
     if (filter === "unread") params.set("unreadOnly", "true");
     fetch(`/api/admin/notifications?${params}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) {
-          setItems(data.items ?? []);
-          setUnread(data.unread ?? 0);
-          setTotal(data.total ?? 0);
-          setTotalPages(data.totalPages ?? 1);
-        }
+      .then((r) => {
+        if (!r.ok) throw new Error("Failed");
+        return r.json();
       })
-      .catch(() => toast("Failed to load notifications", "error"))
+      .then((data) => {
+        setItems(data.items ?? []);
+        setUnread(data.unread ?? 0);
+        setAllTotal(data.allTotal ?? data.total ?? 0);
+        setTotalPages(data.totalPages ?? 1);
+      })
+      .catch(() => {
+        setLoadError("Could not load notifications");
+        toast("Failed to load notifications", "error");
+      })
       .finally(() => setLoading(false));
   }, [filter, page, toast]);
 
@@ -65,7 +104,7 @@ export function AdminNotifications() {
     load();
   }, [load]);
 
-  function onFilterChange(value: "all" | "unread") {
+  function onFilterChange(value: FilterTab) {
     setFilter(value);
     setPage(1);
   }
@@ -111,135 +150,182 @@ export function AdminNotifications() {
     setSavingPrefs(false);
   }
 
+  const description =
+    unread > 0
+      ? `${unread} unread · ${allTotal} total`
+      : allTotal > 0
+        ? "You're all caught up"
+        : "Alerts for follow-ups and team activity";
+
   if (loading && items.length === 0) return <AdminSkeleton rows={8} />;
+
+  if (loadError && items.length === 0) {
+    return (
+      <div className="rounded-2xl border border-red-500/30 p-6 text-center text-red-400">
+        {loadError}
+        <button type="button" onClick={load} className="admin-link-accent mt-2">
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Notifications</h1>
-          <p className="text-muted">
-            {unread > 0 ? `${unread} unread` : "You're all caught up"}
-            {total > 0 ? ` · ${total} total` : ""}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <select
-            value={filter}
-            onChange={(e) => onFilterChange(e.target.value as "all" | "unread")}
-            className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white"
-          >
-            <option value="all">All</option>
-            <option value="unread">Unread only</option>
-          </select>
-          {unread > 0 && (
-            <button
-              type="button"
-              onClick={() => void markAllRead()}
-              className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted hover:text-white"
-            >
+      <AdminPageHeader
+        hideTitle
+        title="Notifications"
+        description={description}
+        action={
+          unread > 0 ? (
+            <button type="button" onClick={() => void markAllRead()} className="admin-toolbar-btn">
               Mark all read
             </button>
-          )}
-        </div>
-      </div>
+          ) : undefined
+        }
+      />
 
-      <div className="rounded-2xl border border-dark-border bg-dark-elevated p-4">
-        <h2 className="text-sm font-semibold">Notification preferences</h2>
-        <label className="mt-3 flex cursor-pointer items-center gap-3 text-sm">
-          <input
-            type="checkbox"
-            checked={emailFollowUpReminders}
-            disabled={savingPrefs}
-            onChange={(e) => void toggleEmailReminders(e.target.checked)}
-          />
-          <span>
-            Email me when assigned follow-ups are due
-            <span className="block text-xs text-muted">
-              In-app notifications always appear in the bell icon
-            </span>
-          </span>
-        </label>
-      </div>
+      <EmailReminderSetting
+        enabled={emailFollowUpReminders}
+        saving={savingPrefs}
+        onChange={(enabled) => void toggleEmailReminders(enabled)}
+        footerLink={{ href: "/admin/settings", label: "Profile & password settings" }}
+      />
 
-      {items.length === 0 ? (
-        <div className="rounded-2xl border border-dark-border bg-dark-elevated p-12 text-center">
-          <p className="text-muted">
-            {filter === "unread" ? "No unread notifications." : "No notifications yet."}
-          </p>
-          <Link
-            href="/admin/affiliates?mine=true&followups=due"
-            className="mt-3 inline-block text-sm text-neon hover:underline"
-          >
-            View my follow-ups →
-          </Link>
-        </div>
-      ) : (
-        <>
-          <ul className="overflow-hidden rounded-2xl border border-dark-border bg-dark-elevated divide-y divide-dark-border/50">
-            {items.map((n) => (
-              <li key={n.id}>
+      <div className="admin-card overflow-hidden">
+        <div className="flex flex-col gap-4 border-b border-dark-border p-4 sm:p-5">
+          <div className="admin-segmented w-fit max-w-full overflow-x-auto">
+            {FILTER_TABS.map((tab) => {
+              const active = filter === tab.value;
+              const count = tab.value === "unread" ? unread : allTotal;
+              return (
                 <button
+                  key={tab.value}
                   type="button"
-                  onClick={() => openNotification(n)}
-                  className={`flex w-full items-start gap-4 px-4 py-4 text-left transition hover:bg-dark/50 ${
-                    !n.readAt ? "bg-neon/5" : ""
-                  }`}
+                  onClick={() => onFilterChange(tab.value)}
+                  className={`admin-segmented-btn whitespace-nowrap ${active ? "admin-segmented-btn-active" : ""}`}
                 >
-                  <span
-                    className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${
-                      n.readAt ? "bg-transparent" : "bg-neon"
-                    }`}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className={`font-medium ${!n.readAt ? "text-white" : "text-muted"}`}>
-                      {n.title}
-                    </p>
-                    {n.body && <p className="mt-0.5 text-sm text-muted">{n.body}</p>}
-                    <p className="mt-1 text-xs text-muted">
-                      {new Date(n.createdAt).toLocaleString()}
-                      {n.type === "follow_up_due" && " · Follow-up"}
-                    </p>
-                  </div>
-                  {!n.readAt && (
-                    <span
-                      role="presentation"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void markRead(n.id);
-                      }}
-                      className="shrink-0 text-xs text-neon hover:underline"
-                    >
-                      Mark read
-                    </span>
-                  )}
+                  {tab.label}
+                  <span className="ml-1.5 tabular-nums opacity-70">{count}</span>
                 </button>
-              </li>
-            ))}
-          </ul>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 text-sm text-muted">
-              <span>
-                Page {page} of {totalPages}
-              </span>
-              <button
-                disabled={page <= 1 || loading}
-                onClick={() => setPage((p) => p - 1)}
-                className="rounded-lg border border-dark-border px-3 py-1 disabled:opacity-40"
-              >
-                Previous
-              </button>
-              <button
-                disabled={page >= totalPages || loading}
-                onClick={() => setPage((p) => p + 1)}
-                className="rounded-lg border border-dark-border px-3 py-1 disabled:opacity-40"
-              >
-                Next
-              </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="p-4 sm:p-5">
+            <AdminSkeleton rows={5} />
+          </div>
+        ) : items.length === 0 ? (
+          <div className="px-4 py-16 text-center sm:px-5">
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full border border-dark-border bg-dark text-muted">
+              <Bell className="h-4 w-4" strokeWidth={1.75} />
             </div>
-          )}
-        </>
-      )}
+            <p className="text-sm text-muted">
+              {filter === "unread" ? "No unread notifications." : "No notifications yet."}
+            </p>
+            <Link
+              href="/admin/affiliates?mine=true&followups=due"
+              className="admin-link-accent mt-3 inline-block"
+            >
+              View my follow-ups
+            </Link>
+          </div>
+        ) : (
+          <>
+            <ul className="divide-y divide-dark-border/60">
+              {items.map((n) => {
+                const isUnread = !n.readAt;
+                const label = typeLabel(n.type);
+                return (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      onClick={() => openNotification(n)}
+                      className={`group flex w-full items-start gap-3 px-4 py-4 text-left transition hover:bg-dark/30 sm:gap-4 sm:px-5 ${
+                        isUnread ? "bg-neon/5" : ""
+                      }`}
+                    >
+                      <span
+                        className={`mt-2 h-2 w-2 shrink-0 rounded-full ${
+                          isUnread ? "bg-neon" : "bg-transparent"
+                        }`}
+                        aria-hidden
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p
+                            className={`font-medium ${isUnread ? "text-white" : "text-muted"}`}
+                          >
+                            {n.title}
+                          </p>
+                          {label && (
+                            <span className="rounded-md bg-dark-border/80 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted">
+                              {label}
+                            </span>
+                          )}
+                        </div>
+                        {n.body && (
+                          <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted">
+                            {n.body}
+                          </p>
+                        )}
+                        <p className="mt-1.5 text-[11px] text-muted-dim">
+                          {formatWhen(n.createdAt)}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2 pt-0.5">
+                        {isUnread && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void markRead(n.id);
+                            }}
+                            className="admin-link-accent text-[11px] opacity-0 transition group-hover:opacity-100"
+                          >
+                            Mark read
+                          </button>
+                        )}
+                        {n.href ? (
+                          <ChevronRight className="h-4 w-4 text-muted opacity-60" strokeWidth={1.75} />
+                        ) : null}
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {totalPages > 1 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-dark-border px-4 py-3 text-sm text-muted sm:px-5">
+                <span>
+                  Page {page} of {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1 || loading}
+                    onClick={() => setPage((p) => p - 1)}
+                    className="admin-toolbar-btn disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages || loading}
+                    onClick={() => setPage((p) => p + 1)}
+                    className="admin-toolbar-btn disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

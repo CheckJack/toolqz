@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { ExternalLink, MoreVertical, Pencil, Search } from "lucide-react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AdminAffiliateForm,
   emptyForm,
   formToPayload,
   AffiliateFormData,
 } from "@/components/admin/AdminAffiliateForm";
+import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { AdminAffiliateKanban } from "@/components/admin/AdminAffiliateKanban";
 import { useToast } from "@/components/admin/Toast";
@@ -25,6 +27,20 @@ import {
   AffiliateUser,
 } from "@/types/affiliate";
 import { isFollowUpDueThisWeek, isFollowUpOverdue } from "@/lib/affiliates";
+
+type StatusTab = "ALL" | "ACTIVE" | "APPLIED" | "IN_PROGRESS" | "PENDING";
+
+const STATUS_TABS: { value: StatusTab; label: string }[] = [
+  { value: "ALL", label: "All" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "APPLIED", label: "Applied" },
+  { value: "IN_PROGRESS", label: "In progress" },
+  { value: "PENDING", label: "Pending" },
+];
+
+const OTHER_STATUSES = AFFILIATE_STATUSES.filter(
+  (s) => !STATUS_TABS.some((tab) => tab.value === s)
+);
 
 function affiliateSignupUrl(program: { signupUrl: string | null; website: string | null }) {
   const url = program.signupUrl?.trim() || program.website?.trim();
@@ -119,12 +135,20 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
 
   const [affiliates, setAffiliates] = useState<AffiliateProgram[]>([]);
   const [total, setTotal] = useState(0);
+  const [tabCounts, setTabCounts] = useState({
+    all: 0,
+    ACTIVE: 0,
+    APPLIED: 0,
+    IN_PROGRESS: 0,
+    PENDING: 0,
+  });
   const [apiCategories, setApiCategories] = useState<string[]>([]);
   const [users, setUsers] = useState<AffiliateUser[]>([]);
   const [tools, setTools] = useState<
     { id: string; name: string; slug: string; published?: boolean; affiliate?: { id: string } | null }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -164,26 +188,45 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     const params = new URLSearchParams(searchParams.toString());
     if (!params.has("sort")) params.set("sort", "updated");
     params.set("pageSize", String(PAGE_SIZE));
 
-    const [aRes, uRes, tRes] = await Promise.all([
-      fetch(`/api/admin/affiliates?${params}`),
-      fetch("/api/admin/users"),
-      fetch("/api/admin/tools?lite=true"),
-    ]);
+    try {
+      const [aRes, uRes, tRes] = await Promise.all([
+        fetch(`/api/admin/affiliates?${params}`),
+        fetch("/api/admin/users"),
+        fetch("/api/admin/tools?lite=true"),
+      ]);
 
-    if (aRes.ok) {
-      const data = await aRes.json();
-      setAffiliates(data.items ?? []);
-      setTotal(data.total ?? 0);
-      setApiCategories(data.categories ?? []);
-      setPendingEdits({});
-    } else toast("Failed to load programs", "error");
-    if (uRes.ok) setUsers(await uRes.json());
-    if (tRes.ok) setTools(await tRes.json());
-    setLoading(false);
+      if (aRes.ok) {
+        const data = await aRes.json();
+        setAffiliates(data.items ?? []);
+        setTotal(data.total ?? 0);
+        setTabCounts(
+          data.counts ?? {
+            all: data.total ?? 0,
+            ACTIVE: 0,
+            APPLIED: 0,
+            IN_PROGRESS: 0,
+            PENDING: 0,
+          }
+        );
+        setApiCategories(data.categories ?? []);
+        setPendingEdits({});
+      } else {
+        setLoadError("Could not load programs");
+        toast("Failed to load programs", "error");
+      }
+      if (uRes.ok) setUsers(await uRes.json());
+      if (tRes.ok) setTools(await tRes.json());
+    } catch {
+      setLoadError("Could not load programs");
+      toast("Failed to load programs", "error");
+    } finally {
+      setLoading(false);
+    }
   }, [searchParams, toast]);
 
   useEffect(() => {
@@ -539,218 +582,369 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
 
   const allMatchingSelected = total > 0 && selected.size === total;
 
+  function setStatusTab(value: StatusTab) {
+    updateParams({ status: value === "ALL" ? null : value, page: null });
+  }
+
+  function tabCount(value: StatusTab): number {
+    if (value === "ALL") return tabCounts.all;
+    return tabCounts[value] ?? 0;
+  }
+
+  function clearFilters() {
+    setSearchInput("");
+    setSearch("");
+    router.replace("/admin/affiliates", { scroll: false });
+  }
+
+  function toggleFlag(
+    key: "unassigned" | "mine" | "followups",
+    on: boolean
+  ) {
+    if (key === "unassigned") {
+      updateParams({
+        unassigned: on ? "true" : null,
+        ...(on ? { mine: null } : {}),
+        page: null,
+      });
+      return;
+    }
+    if (key === "mine") {
+      updateParams({
+        mine: on ? "true" : null,
+        ...(on ? { unassigned: null } : {}),
+        page: null,
+      });
+      return;
+    }
+    updateParams({ followups: on ? "due" : null, page: null });
+  }
+
+  const statusTab =
+    STATUS_TABS.some((tab) => tab.value === status) ? (status as StatusTab) : "ALL";
+  const otherStatusSelected = status !== "ALL" && !STATUS_TABS.some((tab) => tab.value === status);
+
+  const listLabel =
+    statusTab === "ALL"
+      ? ""
+      : statusTab === "IN_PROGRESS"
+        ? "in progress"
+        : statusTab.toLowerCase();
+
+  if (loading && affiliates.length === 0) return <AdminSkeleton rows={8} />;
+
+  if (loadError && affiliates.length === 0) {
+    return (
+      <div className="rounded-2xl border border-red-500/30 p-6 text-center text-red-400">
+        {loadError}
+        <button type="button" onClick={load} className="mt-2 block w-full text-sm text-neon">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Affiliate CRM</h1>
-          <p className="text-muted">
-            {total} program{total === 1 ? "" : "s"}
-            {view === "kanban"
-              ? " · kanban view"
-              : total !== affiliates.length
-                ? ` · showing ${affiliates.length} on this page`
-                : ""}
-          </p>
-          <div className="mt-2 inline-flex rounded-lg border border-dark-border p-0.5 text-sm">
+      <AdminPageHeader
+        hideTitle
+        title="Affiliate CRM"
+        description={`${total} ${listLabel ? `${listLabel} ` : ""}program${total === 1 ? "" : "s"}${view === "kanban" ? " · kanban view" : ""}`}
+        action={
+          <div className="flex flex-wrap gap-2">
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setShowImport(true)}
+                className="admin-toolbar-btn"
+              >
+                Import
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => updateParams({ view: null, page: null })}
-              className={`rounded-md px-3 py-1 ${view !== "kanban" ? "bg-neon/10 text-neon" : "text-muted"}`}
+              onClick={() => exportCsv(selected.size ? [...selected] : undefined)}
+              className="admin-toolbar-btn"
             >
-              List
+              Export{selected.size ? ` (${selected.size})` : ""}
             </button>
             <button
               type="button"
-              onClick={() => updateParams({ view: "kanban", page: null })}
-              className={`rounded-md px-3 py-1 ${view === "kanban" ? "bg-neon/10 text-neon" : "text-muted"}`}
+              onClick={() => setShowCreate(true)}
+              className="admin-btn-primary"
             >
-              Kanban
+              Add program
             </button>
           </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => setShowCreate(true)} className="rounded-xl bg-neon px-4 py-2 text-sm font-semibold text-ink">
-            + Add program
-          </button>
-          {isAdmin && (
-            <button onClick={() => setShowImport(true)} className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted hover:text-white">
-              Import
-            </button>
-          )}
-          <button onClick={() => exportCsv(selected.size ? [...selected] : undefined)} className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted hover:text-white">
-            Export{selected.size ? ` (${selected.size})` : " all"}
-          </button>
-        </div>
-      </div>
+        }
+      />
 
-      {activeFilters.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
-          {activeFilters.map((chip) => (
+      <div className="admin-card overflow-hidden">
+        <div className="flex flex-col gap-4 border-b border-dark-border p-4 sm:p-5">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="admin-segmented w-fit max-w-full overflow-x-auto">
+              {STATUS_TABS.map((tab) => {
+                const active = statusTab === tab.value && !otherStatusSelected;
+                return (
+                  <button
+                    key={tab.value}
+                    type="button"
+                    onClick={() => setStatusTab(tab.value)}
+                    className={`admin-segmented-btn whitespace-nowrap ${active ? "admin-segmented-btn-active" : ""}`}
+                  >
+                    {tab.label}
+                    <span className="ml-1.5 tabular-nums opacity-70">{tabCount(tab.value)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <div className="admin-segmented w-fit">
+              <button
+                type="button"
+                onClick={() => updateParams({ view: null, page: null })}
+                className={`admin-segmented-btn ${view !== "kanban" ? "admin-segmented-btn-active" : ""}`}
+              >
+                List
+              </button>
+              <button
+                type="button"
+                onClick={() => updateParams({ view: "kanban", page: null })}
+                className={`admin-segmented-btn ${view === "kanban" ? "admin-segmented-btn-active" : ""}`}
+              >
+                Kanban
+              </button>
+            </div>
+          </div>
+
+          <div className="relative min-w-0">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-dim"
+              strokeWidth={1.75}
+            />
+            <input
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Search company…"
+              className="w-full rounded-lg border border-dark-border bg-dark py-2 pl-9 pr-3 text-sm text-white placeholder:text-muted-dim focus:border-neon/40 focus:outline-none"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 lg:flex-row">
+            <div className="flex min-w-0 flex-1 flex-wrap gap-2">
+              <select
+                value={priority}
+                onChange={(e) => updateParams({ priority: e.target.value || null, page: null })}
+                className="min-w-[8.5rem] flex-1 rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:flex-none"
+              >
+                <option value="">All priorities</option>
+                {AFFILIATE_PRIORITIES.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={category}
+                onChange={(e) => updateParams({ category: e.target.value || null, page: null })}
+                className="min-w-[9rem] flex-1 rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:flex-none"
+              >
+                <option value="">All categories</option>
+                {categoryOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={assignee}
+                onChange={(e) => updateParams({ assignedToId: e.target.value || null, page: null })}
+                className="min-w-[9rem] flex-1 rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:flex-none"
+              >
+                <option value="">All assignees</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={hasTool}
+                onChange={(e) => updateParams({ hasTool: e.target.value || null, page: null })}
+                className="min-w-[9rem] flex-1 rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:flex-none"
+              >
+                <option value="">All programs</option>
+                <option value="true">Has linked tool</option>
+                <option value="false">No linked tool</option>
+              </select>
+              <select
+                value={otherStatusSelected ? status : ""}
+                onChange={(e) => updateParams({ status: e.target.value || null, page: null })}
+                className="min-w-[9rem] flex-1 rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:flex-none"
+              >
+                <option value="">More statuses</option>
+                {OTHER_STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {s.replace(/_/g, " ")}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={sort}
+                onChange={(e) => updateParams({ sort: e.target.value })}
+                className="min-w-[9rem] flex-1 rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white sm:flex-none"
+              >
+                <option value="updated">Last updated</option>
+                <option value="name">Company name</option>
+                <option value="followup">Next follow-up</option>
+                <option value="priority">Priority</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
             <button
-              key={chip.key}
               type="button"
-              onClick={() => updateParams({ ...chip.clear, page: null })}
-              className="inline-flex items-center gap-1 rounded-full border border-dark-border bg-dark-elevated px-3 py-1 text-xs text-muted hover:border-neon/30 hover:text-white"
+              onClick={() => toggleFlag("unassigned", !unassigned)}
+              className={`admin-toolbar-btn ${unassigned ? "border-neon/40 text-neon" : ""}`}
             >
-              {chip.label}
-              <span aria-hidden>×</span>
+              Unassigned
             </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => router.replace("/admin/affiliates")}
-            className="text-xs text-neon hover:underline"
-          >
-            Clear all
-          </button>
-        </div>
-      )}
-
-      <div className="grid gap-3 rounded-2xl border border-dark-border bg-dark-elevated p-4 sm:grid-cols-2 lg:grid-cols-4">
-        <input
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder="Search company..."
-          className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white focus:border-neon/50 focus:outline-none sm:col-span-2"
-        />
-        <select value={status} onChange={(e) => updateParams({ status: e.target.value === "ALL" ? null : e.target.value, page: null })} className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white">
-          <option value="ALL">All statuses</option>
-          {AFFILIATE_STATUSES.map((s) => (
-            <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
-          ))}
-        </select>
-        <select value={sort} onChange={(e) => updateParams({ sort: e.target.value })} className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white">
-          <option value="updated">Last updated</option>
-          <option value="name">Company name</option>
-          <option value="followup">Next follow-up</option>
-          <option value="priority">Priority</option>
-        </select>
-        <select value={priority} onChange={(e) => updateParams({ priority: e.target.value || null, page: null })} className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white">
-          <option value="">All priorities</option>
-          {AFFILIATE_PRIORITIES.map((p) => (
-            <option key={p} value={p}>{p}</option>
-          ))}
-        </select>
-        <select value={category} onChange={(e) => updateParams({ category: e.target.value || null, page: null })} className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white">
-          <option value="">All categories</option>
-          {categoryOptions.map((c) => (
-            <option key={c} value={c}>{c}</option>
-          ))}
-        </select>
-        <select value={assignee} onChange={(e) => updateParams({ assignedToId: e.target.value || null, page: null })} className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white">
-          <option value="">All assignees</option>
-          {users.map((u) => (
-            <option key={u.id} value={u.id}>{u.name}</option>
-          ))}
-        </select>
-        <select value={hasTool} onChange={(e) => updateParams({ hasTool: e.target.value || null, page: null })} className="rounded-xl border border-dark-border bg-dark px-3 py-2 text-sm text-white">
-          <option value="">All programs</option>
-          <option value="true">Has linked tool</option>
-          <option value="false">No linked tool</option>
-        </select>
-        <label className="flex items-center gap-2 text-sm text-muted">
-          <input
-            type="checkbox"
-            checked={unassigned}
-            onChange={(e) => {
-              const on = e.target.checked;
-              updateParams({
-                unassigned: on ? "true" : null,
-                ...(on ? { mine: null } : {}),
-                page: null,
-              });
-            }}
-          />
-          Unassigned only
-        </label>
-        <label className="flex items-center gap-2 text-sm text-muted">
-          <input
-            type="checkbox"
-            checked={mine}
-            onChange={(e) => {
-              const on = e.target.checked;
-              updateParams({
-                mine: on ? "true" : null,
-                ...(on ? { unassigned: null } : {}),
-                page: null,
-              });
-            }}
-          />
-          My assignments
-        </label>
-        <label className="flex items-center gap-2 text-sm text-muted">
-          <input type="checkbox" checked={followups === "due"} onChange={(e) => updateParams({ followups: e.target.checked ? "due" : null, page: null })} />
-          Follow-ups due (7 days)
-        </label>
-      </div>
-
-      {selected.size > 0 && isAdmin && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-neon/20 bg-neon/5 p-3 text-sm">
-          <span>{selected.size} selected{bulkWorking ? " · updating…" : ""}</span>
-          {total > affiliates.length && !allMatchingSelected && (
             <button
               type="button"
-              onClick={selectAllMatching}
-              disabled={selectingAll}
-              className="text-neon hover:underline disabled:opacity-50"
+              onClick={() => toggleFlag("mine", !mine)}
+              className={`admin-toolbar-btn ${mine ? "border-neon/40 text-neon" : ""}`}
             >
-              {selectingAll ? "Selecting…" : `Select all ${total} matching filters`}
+              My assignments
             </button>
-          )}
-          <select onChange={(e) => { bulkAssign(e.target.value); e.target.value = ""; }} className="rounded-lg border border-dark-border bg-dark px-2 py-1 text-white">
-            <option value="">Assign to...</option>
-            {users.map((u) => (
-              <option key={u.id} value={u.id}>{u.name}</option>
-            ))}
-          </select>
-          <select onChange={(e) => { bulkStatus(e.target.value); e.target.value = ""; }} className="rounded-lg border border-dark-border bg-dark px-2 py-1 text-white">
-            <option value="">Change status...</option>
-            {AFFILIATE_STATUSES.map((s) => (
-              <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
-            ))}
-          </select>
-        </div>
-      )}
+            <button
+              type="button"
+              onClick={() => toggleFlag("followups", followups !== "due")}
+              className={`admin-toolbar-btn ${followups === "due" ? "border-neon/40 text-neon" : ""}`}
+            >
+              Follow-ups due
+            </button>
+          </div>
 
-      {loading ? (
-        <AdminSkeleton rows={8} />
-      ) : affiliates.length === 0 ? (
-        <div className="rounded-2xl border border-dark-border bg-dark-elevated p-12 text-center">
-          <p className="text-muted">No programs match your filters.</p>
-          <button onClick={() => router.replace("/admin/affiliates")} className="mt-3 text-sm text-neon hover:underline">
-            Clear all filters
-          </button>
+          {activeFilters.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-dark-border/60 pt-3">
+              {activeFilters.map((chip) => (
+                <button
+                  key={chip.key}
+                  type="button"
+                  onClick={() => updateParams({ ...chip.clear, page: null })}
+                  className="admin-toolbar-btn py-1 text-[11px]"
+                >
+                  {chip.label}
+                  <span aria-hidden className="opacity-60">
+                    ×
+                  </span>
+                </button>
+              ))}
+              <button type="button" onClick={clearFilters} className="admin-link-accent text-xs">
+                Clear all
+              </button>
+            </div>
+          )}
         </div>
-      ) : view === "kanban" ? (
-        <AdminAffiliateKanban
-          programs={affiliates}
-          onStatusChange={(id, status) => quickPatch(id, { status }, { silent: true })}
-          canDragProgram={(p) => canEditAffiliateRow(user, p)}
-        />
-      ) : (
-        <>
-          <div className="overflow-hidden rounded-2xl border border-dark-border bg-dark-elevated">
+
+        {selected.size > 0 && isAdmin && (
+          <div className="flex flex-wrap items-center gap-2 border-b border-neon/20 bg-neon/5 px-4 py-3 text-sm sm:px-5">
+            <span className="text-white">
+              {selected.size} selected{bulkWorking ? " · updating…" : ""}
+            </span>
+            {total > affiliates.length && !allMatchingSelected && (
+              <button
+                type="button"
+                onClick={selectAllMatching}
+                disabled={selectingAll}
+                className="admin-link-accent disabled:opacity-50"
+              >
+                {selectingAll ? "Selecting…" : `Select all ${total} matching`}
+              </button>
+            )}
+            <select
+              onChange={(e) => {
+                bulkAssign(e.target.value);
+                e.target.value = "";
+              }}
+              className="rounded-lg border border-dark-border bg-dark px-2 py-1.5 text-sm text-white"
+            >
+              <option value="">Assign to…</option>
+              {users.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.name}
+                </option>
+              ))}
+            </select>
+            <select
+              onChange={(e) => {
+                bulkStatus(e.target.value);
+                e.target.value = "";
+              }}
+              className="rounded-lg border border-dark-border bg-dark px-2 py-1.5 text-sm text-white"
+            >
+              <option value="">Change status…</option>
+              {AFFILIATE_STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {s.replace(/_/g, " ")}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="p-4 sm:p-5">
+            <AdminSkeleton rows={6} />
+          </div>
+        ) : affiliates.length === 0 ? (
+          <div className="px-4 py-16 text-center sm:px-5">
+            <p className="text-sm text-muted">No programs match your filters.</p>
+            {(search ||
+              status !== "ALL" ||
+              priority ||
+              category ||
+              assignee ||
+              hasTool ||
+              unassigned ||
+              mine ||
+              followups) && (
+              <button type="button" onClick={clearFilters} className="admin-link-accent mt-3">
+                Clear filters
+              </button>
+            )}
+          </div>
+        ) : view === "kanban" ? (
+          <div className="p-4 sm:p-5">
+            <AdminAffiliateKanban
+              programs={affiliates}
+              onStatusChange={(id, status) => quickPatch(id, { status }, { silent: true })}
+              canDragProgram={(p) => canEditAffiliateRow(user, p)}
+            />
+          </div>
+        ) : (
+          <>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className="admin-table min-w-[760px]">
                 <thead>
-                  <tr className="border-b border-dark-border text-left text-muted">
-                    <th className="w-8 px-3 py-3">
-                      {isAdmin && (
+                  <tr>
+                    {isAdmin && (
+                      <th className="w-10">
                         <input
                           type="checkbox"
                           checked={allPageSelected}
                           onChange={toggleSelectAllPage}
                           title="Select all on this page"
+                          aria-label="Select all on this page"
                         />
-                      )}
-                    </th>
-                    <th className="px-3 py-3 font-medium">Company</th>
-                    <th className="px-3 py-3 font-medium">Sign up</th>
-                    <th className="px-3 py-3 font-medium">Category</th>
-                    <th className="px-3 py-3 font-medium">Commission</th>
-                    <th className="px-3 py-3 font-medium">Status</th>
-                    <th className="px-3 py-3 font-medium">Assignee</th>
+                      </th>
+                    )}
+                    <th>Company</th>
+                    <th className="hidden md:table-cell">Category</th>
+                    <th className="hidden lg:table-cell">Commission</th>
+                    <th>Status</th>
+                    <th className="hidden sm:table-cell">Assignee</th>
+                    <th className="w-12" aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
@@ -763,130 +957,167 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
                     const hasPending = rowHasPending(a, pending);
                     const canEdit = canEditAffiliateRow(user, a);
                     const signup = affiliateSignupUrl(a);
+
                     return (
                       <Fragment key={a.id}>
-                      <tr className={`border-b border-dark-border/50 last:border-0 hover:bg-dark/50 ${overdue ? "bg-red-500/5" : dueSoon ? "bg-amber-500/5" : ""} ${hasPending ? "ring-1 ring-inset ring-neon/30" : ""}`}>
-                        <td className="px-3 py-3">
-                          <input type="checkbox" checked={selected.has(a.id)} onChange={() => {
-                            setSelected((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(a.id)) next.delete(a.id);
-                              else next.add(a.id);
-                              return next;
-                            });
-                          }} />
-                        </td>
-                        <td className="px-3 py-3">
-                          <Link href={`/admin/affiliates/${a.id}`} className="font-medium text-white hover:text-neon">
-                            {a.companyName}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-3">
-                          {signup ? (
-                            <a
-                              href={signup}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-flex rounded-lg border border-neon/30 bg-neon/10 px-2.5 py-1 text-xs font-medium text-neon hover:bg-neon/20"
-                            >
-                              Sign up ↗
-                            </a>
-                          ) : (
-                            <span className="text-xs text-muted">—</span>
+                        <tr
+                          className={`${overdue ? "bg-red-500/5" : dueSoon ? "bg-amber-500/5" : ""} ${hasPending ? "ring-1 ring-inset ring-neon/30" : ""}`}
+                        >
+                          {isAdmin && (
+                            <td>
+                              <input
+                                type="checkbox"
+                                checked={selected.has(a.id)}
+                                onChange={() => {
+                                  setSelected((prev) => {
+                                    const next = new Set(prev);
+                                    if (next.has(a.id)) next.delete(a.id);
+                                    else next.add(a.id);
+                                    return next;
+                                  });
+                                }}
+                                aria-label={`Select ${a.companyName}`}
+                              />
+                            </td>
                           )}
-                        </td>
-                        <td className="px-3 py-3 text-muted">{a.category ?? "—"}</td>
-                        <td className="px-3 py-3 text-muted">{a.commission ?? "—"}</td>
-                        <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                          {canEdit ? (
-                            <select
-                              value={displayStatus}
-                              onChange={(e) => setRowPending(a.id, { status: e.target.value })}
-                              className={`rounded-lg border border-dark-border bg-dark px-2 py-1 text-xs ${statusColors[displayStatus]?.split(" ")[0] ?? ""}`}
+                          <td className="min-w-[12rem]">
+                            <Link
+                              href={`/admin/affiliates/${a.id}`}
+                              className="block font-medium text-white hover:text-neon"
                             >
-                              {AFFILIATE_STATUSES.map((s) => (
-                                <option key={s} value={s}>{s.replace(/_/g, " ")}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span className={`text-xs ${statusColors[a.status]?.split(" ")[0] ?? "text-muted"}`}>
-                              {a.status.replace(/_/g, " ")}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                          {canEdit ? (
-                            <select
-                              value={displayAssignee}
-                              onChange={(e) => setRowPending(a.id, { assignedToId: e.target.value || null })}
-                              className="rounded-lg border border-dark-border bg-dark px-2 py-1 text-xs text-white"
-                            >
-                              <option value="">—</option>
-                              {(isAdmin ? users : users.filter((u) => u.id === user.id)).map((u) => (
-                                <option key={u.id} value={u.id}>{u.name}</option>
-                              ))}
-                            </select>
-                          ) : (
-                            <span className="text-xs text-muted">
-                              {a.assignedTo?.name ?? "—"}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                      {hasPending && (
-                        <tr key={`${a.id}-pending`} className="border-b border-dark-border/50 bg-neon/5">
-                          <td colSpan={7} className="px-3 py-2">
-                            <div className="flex flex-wrap items-center gap-2 text-xs">
-                              <span className="text-muted">Unsaved changes for {a.companyName}</span>
-                              <button
-                                type="button"
-                                onClick={() => applyRowEdit(a)}
-                                className="rounded-lg bg-neon px-2 py-1 font-medium text-ink"
-                              >
-                                Apply
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => clearPending(a.id)}
-                                className="rounded-lg border border-dark-border px-2 py-1 text-muted hover:text-white"
-                              >
-                                Discard
-                              </button>
+                              {a.companyName}
+                            </Link>
+                            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
+                              {a.priority && a.priority !== "MEDIUM" && (
+                                <span className="text-muted-dim">{a.priority}</span>
+                              )}
+                              {a.tool && (
+                                <Link
+                                  href={`/admin/tools/${a.tool.id}`}
+                                  className="text-neon/80 hover:text-neon"
+                                >
+                                  {a.tool.name}
+                                </Link>
+                              )}
+                              {overdue && <span className="text-red-400">Follow-up overdue</span>}
+                              {!overdue && dueSoon && (
+                                <span className="text-amber-400">Follow-up due</span>
+                              )}
                             </div>
+                            <p className="mt-1 text-[11px] text-muted md:hidden">
+                              {a.category ?? "—"}
+                              {a.commission ? ` · ${a.commission}` : ""}
+                            </p>
+                          </td>
+                          <td className="hidden text-muted md:table-cell">{a.category ?? "—"}</td>
+                          <td className="hidden text-muted lg:table-cell">{a.commission ?? "—"}</td>
+                          <td onClick={(e) => e.stopPropagation()}>
+                            {canEdit ? (
+                              <select
+                                value={displayStatus}
+                                onChange={(e) => setRowPending(a.id, { status: e.target.value })}
+                                className={`max-w-[8.5rem] rounded-lg border border-dark-border bg-dark px-2 py-1 text-xs text-white ${statusColors[displayStatus]?.split(" ")[0] ?? ""}`}
+                              >
+                                {AFFILIATE_STATUSES.map((s) => (
+                                  <option key={s} value={s}>
+                                    {s.replace(/_/g, " ")}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span
+                                className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-medium ${statusColors[a.status] ?? "text-muted bg-dark-border"}`}
+                              >
+                                {a.status.replace(/_/g, " ")}
+                              </span>
+                            )}
+                          </td>
+                          <td className="hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
+                            {canEdit ? (
+                              <select
+                                value={displayAssignee}
+                                onChange={(e) =>
+                                  setRowPending(a.id, { assignedToId: e.target.value || null })
+                                }
+                                className="max-w-[9rem] rounded-lg border border-dark-border bg-dark px-2 py-1 text-xs text-white"
+                              >
+                                <option value="">—</option>
+                                {(isAdmin ? users : users.filter((u) => u.id === user.id)).map(
+                                  (u) => (
+                                    <option key={u.id} value={u.id}>
+                                      {u.name}
+                                    </option>
+                                  )
+                                )}
+                              </select>
+                            ) : (
+                              <span className="text-muted">{a.assignedTo?.name ?? "—"}</span>
+                            )}
+                          </td>
+                          <td className="w-12 text-right">
+                            <AffiliateRowActions program={a} signupUrl={signup} />
                           </td>
                         </tr>
-                      )}
+                        {hasPending && (
+                          <tr className="bg-neon/5">
+                            <td colSpan={isAdmin ? 7 : 6} className="px-4 py-2 sm:px-5">
+                              <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <span className="text-muted">
+                                  Unsaved changes for {a.companyName}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => applyRowEdit(a)}
+                                  className="admin-btn-primary px-2.5 py-1 text-[11px]"
+                                >
+                                  Apply
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => clearPending(a.id)}
+                                  className="admin-toolbar-btn py-1 text-[11px]"
+                                >
+                                  Discard
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
                       </Fragment>
                     );
                   })}
                 </tbody>
               </table>
             </div>
-          </div>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-center gap-2 text-sm text-muted">
-              <span>
-                Page {page} of {totalPages}
-              </span>
-              <button
-                disabled={page <= 1}
-                onClick={() => updateParams({ page: String(page - 1) })}
-                className="rounded-lg border border-dark-border px-3 py-1 text-sm disabled:opacity-40"
-              >
-                Previous
-              </button>
-              <button
-                disabled={page >= totalPages}
-                onClick={() => updateParams({ page: String(page + 1) })}
-                className="rounded-lg border border-dark-border px-3 py-1 text-sm disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
-          )}
-        </>
-      )}
+
+            {totalPages > 1 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-dark-border px-4 py-3 text-sm text-muted sm:px-5">
+                <span>
+                  Page {page} of {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    disabled={page <= 1}
+                    onClick={() => updateParams({ page: String(page - 1) })}
+                    className="admin-toolbar-btn disabled:opacity-40"
+                  >
+                    Previous
+                  </button>
+                  <button
+                    type="button"
+                    disabled={page >= totalPages}
+                    onClick={() => updateParams({ page: String(page + 1) })}
+                    className="admin-toolbar-btn disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
 
       {showCreate && (
         <div
@@ -954,6 +1185,94 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
               <button onClick={closeImportModal} className="rounded-xl border border-dark-border px-4 py-2 text-sm text-muted">Close</button>
             </div>
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AffiliateRowActions({
+  program,
+  signupUrl,
+}: {
+  program: AffiliateProgram;
+  signupUrl: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+
+    function onPointerDown(event: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mousedown", onPointerDown);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative inline-flex justify-end">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="admin-icon-btn h-8 w-8"
+        aria-label={`Actions for ${program.companyName}`}
+        aria-expanded={open}
+        aria-haspopup="menu"
+      >
+        <MoreVertical className="h-4 w-4" strokeWidth={1.75} />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          className="admin-menu absolute right-0 top-full z-30 mt-1 min-w-[10.5rem] py-1"
+        >
+          <Link
+            href={`/admin/affiliates/${program.id}`}
+            role="menuitem"
+            onClick={() => setOpen(false)}
+            className="admin-menu-item"
+          >
+            <Pencil className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+            Edit program
+          </Link>
+          {program.tool && (
+            <Link
+              href={`/admin/tools/${program.tool.id}`}
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="admin-menu-item"
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+              View linked tool
+            </Link>
+          )}
+          {signupUrl && (
+            <a
+              href={signupUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className="admin-menu-item"
+            >
+              <ExternalLink className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
+              Sign up page
+            </a>
+          )}
         </div>
       )}
     </div>

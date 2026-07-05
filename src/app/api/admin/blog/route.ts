@@ -24,16 +24,18 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search")?.trim() ?? "";
     const publishedFilter = searchParams.get("published");
 
-    const where = {
-      ...(search
-        ? {
-            OR: [
-              { title: { contains: search } },
-              { excerpt: { contains: search } },
-              { slug: { contains: search } },
-            ],
-          }
-        : {}),
+    const searchWhere = search
+      ? {
+          OR: [
+            { title: { contains: search } },
+            { excerpt: { contains: search } },
+            { slug: { contains: search } },
+          ],
+        }
+      : {};
+
+    const listWhere = {
+      ...searchWhere,
       ...(publishedFilter === "true"
         ? { published: true }
         : publishedFilter === "false"
@@ -41,20 +43,28 @@ export async function GET(request: NextRequest) {
           : {}),
     };
 
-    const [items, total] = await Promise.all([
+    const [items, total, publishedCount, draftCount, allCount] = await Promise.all([
       prisma.blogPost.findMany({
-        where,
+        where: listWhere,
         include: authorInclude,
         orderBy: [{ updatedAt: "desc" }],
         skip: (page - 1) * pageSize,
         take: pageSize,
       }),
-      prisma.blogPost.count({ where }),
+      prisma.blogPost.count({ where: listWhere }),
+      prisma.blogPost.count({ where: { ...searchWhere, published: true } }),
+      prisma.blogPost.count({ where: { ...searchWhere, published: false } }),
+      prisma.blogPost.count({ where: searchWhere }),
     ]);
 
     return NextResponse.json({
       items: items.map(serializeBlogListItem),
       total,
+      counts: {
+        all: allCount,
+        published: publishedCount,
+        draft: draftCount,
+      },
       page,
       pageSize,
     });
