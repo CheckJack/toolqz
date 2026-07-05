@@ -52,7 +52,13 @@ async function writeSnapshot(snapshot: BuildSnapshot): Promise<void> {
   await setMonitorState(STATE_KEY, JSON.stringify(snapshot));
 }
 
-export async function runBuildMonitor() {
+function mapBuildStatus(status: string): "running" | "completed" | "failed" {
+  if (isCompleted(status)) return "completed";
+  if (isFailed(status)) return "failed";
+  return "running";
+}
+
+export async function runBuildMonitor(options?: { force?: boolean }) {
   if (!isHostingerConfigured()) {
     return { ok: true, skipped: true, reason: "hostinger_not_configured", emailsSent: 0 };
   }
@@ -64,6 +70,36 @@ export async function runBuildMonitor() {
     return { ok: true, skipped: true, reason: "no_builds", emailsSent: 0 };
   }
 
+  const recipients = await getAdminAlertRecipients();
+  const createdAt = latest.createdAt
+    ? new Date(latest.createdAt).toLocaleString("en-GB", { timeZone: "Europe/Lisbon" })
+    : undefined;
+
+  if (options?.force) {
+    let emailsSent = 0;
+    const status = mapBuildStatus(latest.status);
+    for (const user of recipients) {
+      const mail = buildStatusEmail({
+        name: user.name,
+        domain,
+        status,
+        buildId: latest.uuid,
+        createdAt,
+      });
+      emailsSent += await sendAlertEmails([user], mail);
+    }
+
+    return {
+      ok: true,
+      skipped: false,
+      forced: true,
+      buildId: latest.uuid,
+      status: latest.status,
+      emailsSent,
+      recipients: recipients.length,
+    };
+  }
+
   const prev = await readSnapshot();
   let snapshot: BuildSnapshot = prev ?? {
     uuid: latest.uuid,
@@ -73,10 +109,6 @@ export async function runBuildMonitor() {
   };
 
   let emailsSent = 0;
-  const recipients = await getAdminAlertRecipients();
-  const createdAt = latest.createdAt
-    ? new Date(latest.createdAt).toLocaleString("en-GB", { timeZone: "Europe/Lisbon" })
-    : undefined;
 
   async function notify(
     status: "running" | "completed" | "failed"

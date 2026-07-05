@@ -6,7 +6,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "prisma generate && next dev",
+    "dev": "node scripts/sync-prisma-provider.mjs && prisma generate && next dev",
     "dev:clean": "rm -rf .next && prisma generate && next dev",
     "prebuild": "node scripts/sync-prisma-provider.mjs && rm -rf .next",
     "build": "prisma generate && next build",

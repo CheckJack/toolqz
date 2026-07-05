@@ -44,13 +44,40 @@ async function checkSiteHealthy(): Promise<{
   return { healthy: true, statusCode: ping.status };
 }
 
-export async function runUptimeCheck() {
+export async function runUptimeCheck(options?: { force?: boolean }) {
   const result = await checkSiteHealthy();
   const prevRaw = await getMonitorState(STATE_KEY);
   const prevHealthy = prevRaw === null ? true : prevRaw === "true";
 
   let emailsSent = 0;
   let alerted = false;
+
+  if (options?.force) {
+    const recipients = await getAdminAlertRecipients();
+    const domain = getHostingerDomain();
+    for (const user of recipients) {
+      const mail = siteStatusEmail({
+        name: user.name,
+        domain,
+        healthy: result.healthy,
+        statusCode: result.statusCode,
+        detail: result.detail,
+      });
+      emailsSent += await sendAlertEmails([user], mail);
+    }
+    alerted = emailsSent > 0;
+
+    return {
+      ok: true,
+      healthy: result.healthy,
+      statusCode: result.statusCode,
+      detail: result.detail ?? null,
+      transitioned: false,
+      forced: true,
+      alerted,
+      emailsSent,
+    };
+  }
 
   if (result.healthy !== prevHealthy) {
     const recipients = await getAdminAlertRecipients();

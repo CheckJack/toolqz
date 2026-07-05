@@ -23,15 +23,31 @@ if (existsSync(envPath)) {
 const to = process.argv[2] ?? "tc@toolqz.com";
 const template = process.argv[3] ?? "password-reset";
 
-const { adminPasswordResetEmail, brandedEmailPreview } = await import(
-  "../src/lib/email-templates.ts"
-);
+const {
+  adminPasswordResetEmail,
+  brandedEmailPreview,
+  partnerInquiryEmail,
+  welcomeNewsletterEmail,
+} = await import("../src/lib/email-templates.ts");
 const { sendEmail } = await import("../src/lib/email.ts");
 
 const mail =
   template === "preview"
     ? brandedEmailPreview()
-    : adminPasswordResetEmail("Tiago", "test-preview-token-not-valid");
+    : template === "newsletter" || template === "newsletter-welcome"
+      ? welcomeNewsletterEmail("Tiago")
+      : template === "partner" || template === "partner-inquiry"
+        ? partnerInquiryEmail({
+            id: "test-preview-001",
+            companyName: "Acme Tools Ltd",
+            contactName: "Tiago Cordeiro",
+            email: "partner@example.com",
+            website: "https://example.com",
+            productLabel: "SaaS / software",
+            message:
+              "We'd love to explore a partnership with TOOLQZ. Our product helps teams ship faster and we think it would be a great fit for your productivity category.",
+          })
+        : adminPasswordResetEmail("Tiago", "test-preview-token-not-valid");
 const result = await sendEmail({
   to,
   toName: "Tiago",
