@@ -10,7 +10,6 @@ function prefersStaticHero(): boolean {
   if (typeof window === "undefined") return true;
 
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
-  if (window.matchMedia("(max-width: 767px)").matches) return true;
 
   const connection = (
     navigator as Navigator & { connection?: { saveData?: boolean } }
@@ -25,14 +24,21 @@ export function HeroVideo() {
   const [staticHero, setStaticHero] = useState(true);
 
   useEffect(() => {
-    if (prefersStaticHero()) return;
-    setStaticHero(false);
+    setStaticHero(prefersStaticHero());
+  }, []);
+
+  useEffect(() => {
+    if (staticHero) return;
 
     const video = videoRef.current;
     if (!video) return;
 
     let hls: { destroy: () => void } | null = null;
     let cancelled = false;
+
+    function tryPlay() {
+      void videoRef.current?.play().catch(() => {});
+    }
 
     import("hls.js").then(({ default: Hls }) => {
       if (cancelled || !videoRef.current) return;
@@ -46,6 +52,7 @@ export function HeroVideo() {
           maxMaxBufferLength: 30,
         });
 
+        instance.on(Hls.Events.MANIFEST_PARSED, tryPlay);
         instance.loadSource(HERO_VIDEO_SRC);
         instance.attachMedia(videoRef.current);
         hls = instance;
@@ -54,6 +61,7 @@ export function HeroVideo() {
 
       if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
         videoRef.current.src = HERO_VIDEO_SRC;
+        videoRef.current.addEventListener("loadedmetadata", tryPlay, { once: true });
       }
     });
 
@@ -61,7 +69,7 @@ export function HeroVideo() {
       cancelled = true;
       hls?.destroy();
     };
-  }, []);
+  }, [staticHero]);
 
   return (
     <div
@@ -86,7 +94,7 @@ export function HeroVideo() {
           loop
           playsInline
           poster={HERO_VIDEO_POSTER}
-          preload="none"
+          preload="metadata"
         />
       )}
       <div className="absolute inset-0 bg-dark/45" />
