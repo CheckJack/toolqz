@@ -9,25 +9,55 @@ function formatDueLabel(dueAt: Date | null): string | null {
   return dueAt.toLocaleDateString("en-GB", { timeZone: "Europe/Lisbon" });
 }
 
+function isSchemaError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    msg.includes("emailTaskDigest") ||
+    msg.includes("AdminTask") ||
+    msg.includes("SystemMonitorState") ||
+    msg.includes("does not exist") ||
+    msg.includes("Unknown column")
+  );
+}
+
 export async function runDailyTaskDigest() {
-  const users = await prisma.user.findMany({
-    where: { emailTaskDigest: true },
-    select: { id: true, email: true, name: true },
-    orderBy: { name: "asc" },
-  });
+  let users: { id: string; email: string; name: string }[];
+
+  try {
+    users = await prisma.user.findMany({
+      where: { emailTaskDigest: true },
+      select: { id: true, email: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  } catch (error) {
+    if (!isSchemaError(error)) throw error;
+    users = await prisma.user.findMany({
+      select: { id: true, email: true, name: true },
+      orderBy: { name: "asc" },
+    });
+  }
 
   let emailsSent = 0;
   let usersWithTasks = 0;
+  let schemaFallback = false;
 
   for (const user of users) {
-    const tasks = await prisma.adminTask.findMany({
-      where: {
-        assignedToId: user.id,
-        status: { in: ["TODO", "IN_PROGRESS"] },
-      },
-      orderBy: [{ dueAt: "asc" }, { priority: "desc" }, { sortOrder: "asc" }],
-      take: 50,
-    });
+    type TaskRow = Awaited<ReturnType<typeof prisma.adminTask.findMany>>[number];
+    let tasks: TaskRow[] = [];
+    try {
+      tasks = await prisma.adminTask.findMany({
+        where: {
+          assignedToId: user.id,
+          status: { in: ["TODO", "IN_PROGRESS"] },
+        },
+        orderBy: [{ dueAt: "asc" }, { priority: "desc" }, { sortOrder: "asc" }],
+        take: 50,
+      });
+    } catch (error) {
+      if (!isSchemaError(error)) throw error;
+      schemaFallback = true;
+      tasks = [];
+    }
 
     const items: TaskDigestItem[] = tasks.map((task) => ({
       title: task.title,
@@ -61,5 +91,6 @@ export async function runDailyTaskDigest() {
     emailsSent,
     users: users.length,
     usersWithTasks,
+    schemaFallback,
   };
 }

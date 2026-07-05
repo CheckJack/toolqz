@@ -14,8 +14,18 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(result);
   } catch (error) {
     console.error("GET /api/cron/daily-tasks:", error);
+    const message = error instanceof Error ? error.message : "Daily task digest failed";
+    const needsMigration =
+      message.includes("emailTaskDigest") ||
+      message.includes("AdminTask") ||
+      message.includes("does not exist");
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Daily task digest failed" },
+      {
+        error: message,
+        hint: needsMigration
+          ? "Run database migrations on production (npm run db:migrate:prod)."
+          : undefined,
+      },
       { status: 500 }
     );
   }
