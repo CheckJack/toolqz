@@ -27,6 +27,7 @@ function serializeTask(task: {
   sortOrder: number;
   linkUrl: string | null;
   linkLabel: string | null;
+  affiliateProgramId: string | null;
   assignedToId: string | null;
   createdById: string | null;
   completedAt: Date | null;
@@ -134,6 +135,18 @@ export async function POST(request: NextRequest) {
     const linkUrl = typeof body.linkUrl === "string" ? body.linkUrl.trim() || null : null;
     const linkLabel = typeof body.linkLabel === "string" ? body.linkLabel.trim() || null : null;
 
+    let affiliateProgramId: string | null = null;
+    if (typeof body.affiliateProgramId === "string" && body.affiliateProgramId.trim()) {
+      const program = await prisma.affiliateProgram.findUnique({
+        where: { id: body.affiliateProgramId.trim() },
+        select: { id: true },
+      });
+      if (!program) {
+        return NextResponse.json({ error: "Affiliate program not found" }, { status: 404 });
+      }
+      affiliateProgramId = program.id;
+    }
+
     let assignedToId: string | null = null;
     if (typeof body.assignedToId === "string" && body.assignedToId.trim()) {
       const user = await prisma.user.findUnique({
@@ -163,6 +176,7 @@ export async function POST(request: NextRequest) {
         dueAt,
         linkUrl,
         linkLabel,
+        affiliateProgramId,
         assignedToId,
         createdById: session.id,
         sortOrder: (maxOrder._max.sortOrder ?? 0) + 1,

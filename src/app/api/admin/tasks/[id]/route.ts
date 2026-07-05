@@ -26,6 +26,7 @@ function serializeTask(task: {
   sortOrder: number;
   linkUrl: string | null;
   linkLabel: string | null;
+  affiliateProgramId: string | null;
   assignedToId: string | null;
   createdById: string | null;
   completedAt: Date | null;
@@ -66,6 +67,7 @@ export async function PATCH(
       linkUrl?: string | null;
       linkLabel?: string | null;
       assignedToId?: string | null;
+      affiliateProgramId?: string | null;
       completedAt?: Date | null;
     } = {};
 
@@ -100,6 +102,21 @@ export async function PATCH(
 
     if (body.linkLabel !== undefined) {
       data.linkLabel = typeof body.linkLabel === "string" ? body.linkLabel.trim() || null : null;
+    }
+
+    if (body.affiliateProgramId !== undefined) {
+      if (body.affiliateProgramId === null || body.affiliateProgramId === "") {
+        data.affiliateProgramId = null;
+      } else if (typeof body.affiliateProgramId === "string") {
+        const program = await prisma.affiliateProgram.findUnique({
+          where: { id: body.affiliateProgramId },
+          select: { id: true },
+        });
+        if (!program) {
+          return NextResponse.json({ error: "Affiliate program not found" }, { status: 404 });
+        }
+        data.affiliateProgramId = program.id;
+      }
     }
 
     if (body.assignedToId !== undefined) {

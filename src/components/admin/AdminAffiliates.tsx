@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ExternalLink, LayoutGrid, Pencil, Search } from "lucide-react";
+import { ExternalLink, LayoutGrid, ListTodo, Pencil, Search } from "lucide-react";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AdminAffiliateForm,
@@ -479,6 +479,60 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
       ok === results.length ? "success" : "error"
     );
     load();
+  }
+
+  async function createSignupTask(program: AffiliateProgram, assigneeId: string) {
+    const assignee = users.find((u) => u.id === assigneeId);
+    const title = `Sign up for the affiliate program of ${program.companyName}`;
+    const signup = affiliateSignupUrl(program);
+
+    try {
+      const [taskRes, affiliateRes] = await Promise.all([
+        fetch("/api/admin/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title,
+            section: "affiliates",
+            status: "TODO",
+            priority: "MEDIUM",
+            assignedToId: assigneeId,
+            ...(signup
+              ? { linkUrl: signup, linkLabel: "Open signup" }
+              : { linkUrl: `/admin/affiliates/${program.id}`, linkLabel: "Open in CRM" }),
+            affiliateProgramId: program.id,
+          }),
+        }),
+        fetch(`/api/admin/affiliates/${program.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ assignedToId: assigneeId }),
+        }),
+      ]);
+
+      if (!taskRes.ok || !affiliateRes.ok) {
+        const taskErr = taskRes.ok ? null : await taskRes.json().catch(() => ({}));
+        const affiliateErr = affiliateRes.ok ? null : await affiliateRes.json().catch(() => ({}));
+        if (!taskRes.ok) {
+          throw new Error(
+            typeof taskErr?.error === "string"
+              ? taskErr.error
+              : "Failed to create task — run npm run db:local if developing on localhost"
+          );
+        }
+        throw new Error(
+          typeof affiliateErr?.error === "string" ? affiliateErr.error : "Failed to update assignee"
+        );
+      }
+
+      toast(
+        `Task created${assignee ? ` for ${assignee.name}` : ""} — assignee updated`,
+        "success"
+      );
+      load();
+    } catch (error) {
+      toast(error instanceof Error ? error.message : "Failed to create task", "error");
+    }
   }
 
   async function quickPatch(
@@ -1086,7 +1140,14 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
                             )}
                           </td>
                           <td className="w-12 text-right">
-                            <AffiliateRowActions program={a} />
+                            <AffiliateRowActions
+                              program={a}
+                              users={
+                                isAdmin ? users : users.filter((u) => u.id === user.id)
+                              }
+                              canCreateTask={canEditAffiliateRow(user, a)}
+                              onCreateSignupTask={createSignupTask}
+                            />
                           </td>
                         </tr>
                         {hasPending && (
@@ -1222,9 +1283,32 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
   );
 }
 
-function AffiliateRowActions({ program }: { program: AffiliateProgram }) {
+function AffiliateRowActions({
+  program,
+  users,
+  canCreateTask,
+  onCreateSignupTask,
+}: {
+  program: AffiliateProgram;
+  users: AffiliateUser[];
+  canCreateTask: boolean;
+  onCreateSignupTask: (program: AffiliateProgram, assigneeId: string) => Promise<void>;
+}) {
+  const [creating, setCreating] = useState(false);
+
+  async function handleAssigneePick(assigneeId: string, close: () => void) {
+    if (!assigneeId || creating) return;
+    setCreating(true);
+    try {
+      await onCreateSignupTask(program, assigneeId);
+      close();
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
-    <AdminRowActionsMenu label={`Actions for ${program.companyName}`}>
+    <AdminRowActionsMenu label={`Actions for ${program.companyName}`} minWidth="12rem">
       {(close) => (
         <>
           <Link
@@ -1236,6 +1320,31 @@ function AffiliateRowActions({ program }: { program: AffiliateProgram }) {
             <Pencil className="h-3.5 w-3.5 shrink-0 opacity-70" strokeWidth={1.75} />
             Edit program
           </Link>
+          {canCreateTask && users.length > 0 && (
+            <div
+              className="border-t border-dark-border px-3 py-2"
+              role="none"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-dim">
+                <ListTodo className="h-3 w-3" strokeWidth={1.75} />
+                Create task
+              </p>
+              <select
+                disabled={creating}
+                defaultValue=""
+                className="w-full rounded-md border border-dark-border bg-dark px-2 py-1.5 text-xs text-white focus:border-neon/40 focus:outline-none disabled:opacity-50"
+                onChange={(e) => void handleAssigneePick(e.target.value, close)}
+              >
+                <option value="">{creating ? "Creating…" : "Choose assignee…"}</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           {program.tool && (
             <Link
               href={`/admin/tools/${program.tool.id}`}
