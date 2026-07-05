@@ -8,7 +8,6 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
-import { CHART } from "@/lib/admin-charts";
 import { ChartEmpty } from "@/components/admin/charts/AdminChartCard";
 import { ChartTooltip } from "@/components/admin/charts/ChartTooltip";
 
@@ -57,7 +56,7 @@ export function DonutBreakdownChart({
             <Tooltip
               content={
                 <ChartTooltip
-                  valueFormatter={(value, name) => {
+                  valueFormatter={(value) => {
                     const pct = total > 0 ? ((value / total) * 100).toFixed(1) : "0";
                     return `${value.toLocaleString()} (${pct}%)`;
                   }}
