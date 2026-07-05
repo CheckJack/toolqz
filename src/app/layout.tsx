@@ -27,6 +27,9 @@ export const viewport = {
   colorScheme: "dark" as const,
 };
 
+/** Avoid serving year-long cached HTML that references stale build chunks after deploy. */
+export const revalidate = 3600;
+
 export const metadata: Metadata = {
   icons: {
     icon: "/favicon.svg",

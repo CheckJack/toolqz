@@ -8,7 +8,7 @@
   "scripts": {
     "dev": "prisma generate && next dev",
     "dev:clean": "rm -rf .next && prisma generate && next dev",
-    "prebuild": "node scripts/sync-prisma-provider.mjs",
+    "prebuild": "node scripts/sync-prisma-provider.mjs && rm -rf .next",
     "build": "prisma generate && next build",
     "start": "node scripts/production-start.mjs",
     "start:next": "next start -H 0.0.0.0 -p ${PORT:-3000}",
