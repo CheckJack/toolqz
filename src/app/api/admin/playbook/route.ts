@@ -8,32 +8,16 @@ import {
   normalizePlaybookCategory,
   PLAYBOOK_CATEGORIES,
 } from "@/constants/admin-playbook";
+import {
+  normalizeStoredAnswer,
+  preparePlaybookAnswerForStorage,
+  serializePlaybookSnippet,
+} from "@/lib/playbook-snippet";
 import { searchPlaybookSnippets } from "@/lib/playbook-search";
 
 const snippetInclude = {
   createdBy: { select: { id: true, name: true } },
 } as const;
-
-function serializeSnippet(snippet: {
-  id: string;
-  question: string;
-  answer: string;
-  category: string;
-  aliases: string | null;
-  tags: string | null;
-  pinned: boolean;
-  sortOrder: number;
-  createdById: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: { id: string; name: string } | null;
-}) {
-  return {
-    ...snippet,
-    createdAt: snippet.createdAt.toISOString(),
-    updatedAt: snippet.updatedAt.toISOString(),
-  };
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -53,11 +37,12 @@ export async function GET(request: NextRequest) {
     });
 
     const results = searchPlaybookSnippets(snippets, q);
-    const items = results.map((row) => ({
-      ...serializeSnippet(row.snippet as (typeof snippets)[number]),
-      score: row.score,
-      matchReason: row.matchReason,
-    }));
+    const items = results.map((row) =>
+      serializePlaybookSnippet(row.snippet as (typeof snippets)[number], {
+        score: row.score,
+        matchReason: row.matchReason,
+      })
+    );
 
     const countsByCategory = Object.fromEntries(
       PLAYBOOK_CATEGORIES.map((c) => [
@@ -98,6 +83,7 @@ export async function POST(request: NextRequest) {
     const aliases = typeof body.aliases === "string" ? body.aliases.trim() || null : null;
     const tags = typeof body.tags === "string" ? body.tags.trim() || null : null;
     const pinned = body.pinned === true;
+    const sensitive = body.sensitive === true;
 
     const maxOrder = await prisma.adminPlaybookSnippet.aggregate({
       where: { category },
@@ -107,23 +93,29 @@ export async function POST(request: NextRequest) {
     const snippet = await prisma.adminPlaybookSnippet.create({
       data: {
         question,
-        answer,
+        answer: preparePlaybookAnswerForStorage(answer, sensitive),
         category,
         aliases,
         tags,
         pinned,
+        sensitive,
         sortOrder: (maxOrder._max.sortOrder ?? 0) + 1,
         createdById: session.id,
       },
       include: snippetInclude,
     });
 
-    await logAudit("create", "playbook", `Added playbook snippet "${snippet.question}"`, {
-      userId: session.id,
-      entityId: snippet.id,
-    });
+    await logAudit(
+      "create",
+      "playbook",
+      `Added playbook snippet "${snippet.question}"${sensitive ? " (sensitive)" : ""}`,
+      { userId: session.id, entityId: snippet.id }
+    );
 
-    return NextResponse.json({ snippet: serializeSnippet(snippet) }, { status: 201 });
+    return NextResponse.json(
+      { snippet: serializePlaybookSnippet(snippet, { reveal: !sensitive }) },
+      { status: 201 }
+    );
   } catch (error) {
     return handleAuthError(error, "Failed to create snippet");
   }

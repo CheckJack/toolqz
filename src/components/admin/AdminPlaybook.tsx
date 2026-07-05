@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, Pencil, Pin, Plus, Search, Trash2 } from "lucide-react";
+import { Copy, Eye, EyeOff, Lock, Pencil, Pin, Plus, Search, Trash2 } from "lucide-react";
 import {
   PLAYBOOK_CATEGORIES,
   PLAYBOOK_CATEGORY_LABELS,
@@ -17,6 +17,8 @@ interface PlaybookItem {
   id: string;
   question: string;
   answer: string;
+  answerHidden?: boolean;
+  sensitive: boolean;
   category: string;
   aliases: string | null;
   tags: string | null;
@@ -34,6 +36,7 @@ const emptyForm = {
   aliases: "",
   tags: "",
   pinned: false,
+  sensitive: false,
 };
 
 const inputClass =
@@ -92,14 +95,21 @@ export function AdminPlaybook({ user }: { user: SessionUser }) {
     void load();
   }, [load]);
 
-  async function copyAnswer(id: string, text: string) {
+  async function copyAnswer(id: string, text: string, sensitive?: boolean) {
     try {
-      await navigator.clipboard.writeText(text);
+      let value = text;
+      if (sensitive) {
+        const res = await fetch(`/api/admin/playbook/${id}?reveal=true`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? "Could not reveal answer");
+        value = data.snippet?.answer ?? "";
+      }
+      await navigator.clipboard.writeText(value);
       setCopiedId(id);
       setTimeout(() => setCopiedId(null), 1500);
       toast("Copied to clipboard", "success");
-    } catch {
-      toast("Could not copy", "error");
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not copy", "error");
     }
   }
 
@@ -168,17 +178,32 @@ export function AdminPlaybook({ user }: { user: SessionUser }) {
     }
   }
 
-  function openEdit(item: PlaybookItem) {
+  async function openEdit(item: PlaybookItem) {
+    setFormError("");
+    let answer = item.answer;
+
+    if (item.sensitive) {
+      try {
+        const res = await fetch(`/api/admin/playbook/${item.id}?reveal=true`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error ?? "Could not load sensitive answer");
+        answer = data.snippet?.answer ?? "";
+      } catch (err) {
+        toast(err instanceof Error ? err.message : "Could not load snippet", "error");
+        return;
+      }
+    }
+
     setEditId(item.id);
     setEditForm({
       question: item.question,
-      answer: item.answer,
+      answer,
       category: (item.category as PlaybookCategory) || "other",
       aliases: item.aliases ?? "",
       tags: item.tags ?? "",
       pinned: item.pinned,
+      sensitive: item.sensitive,
     });
-    setFormError("");
   }
 
   const pinnedItems = !search ? items.filter((i) => i.pinned) : [];
@@ -367,13 +392,42 @@ function SnippetCard({
   item: PlaybookItem;
   copiedId: string | null;
   isAdmin: boolean;
-  onCopy: (id: string, text: string) => void;
+  onCopy: (id: string, text: string, sensitive?: boolean) => void;
   onEdit: (item: PlaybookItem) => void;
   onDelete: (id: string) => void;
   showMatch: boolean;
 }) {
+  const { toast } = useToast();
+  const [revealed, setRevealed] = useState(false);
+  const [revealedAnswer, setRevealedAnswer] = useState<string | null>(null);
+  const [revealing, setRevealing] = useState(false);
+
   const categoryLabel =
     PLAYBOOK_CATEGORY_LABELS[item.category as PlaybookCategory] ?? item.category;
+
+  const isHidden = item.sensitive && !revealed;
+  const displayAnswer = revealed && revealedAnswer ? revealedAnswer : item.answer;
+
+  async function toggleReveal() {
+    if (revealed) {
+      setRevealed(false);
+      setRevealedAnswer(null);
+      return;
+    }
+
+    setRevealing(true);
+    try {
+      const res = await fetch(`/api/admin/playbook/${item.id}?reveal=true`);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Could not reveal answer");
+      setRevealedAnswer(data.snippet?.answer ?? "");
+      setRevealed(true);
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Could not reveal answer", "error");
+    } finally {
+      setRevealing(false);
+    }
+  }
 
   return (
     <article className="rounded-xl border border-dark-border bg-dark/40 p-4 transition hover:border-border-hover">
@@ -387,6 +441,12 @@ function SnippetCard({
                 Pinned
               </span>
             )}
+            {item.sensitive && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-200/90">
+                <Lock className="h-2.5 w-2.5" />
+                Sensitive
+              </span>
+            )}
             <span className="rounded-full bg-dark-border px-2 py-0.5 text-[10px] text-muted">
               {categoryLabel}
             </span>
@@ -394,15 +454,35 @@ function SnippetCard({
           {showMatch && item.matchReason && (
             <p className="mt-1 text-[11px] text-neon/80">Matched: {item.matchReason}</p>
           )}
-          <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-muted line-clamp-4">
-            {item.answer}
+          <p
+            className={`mt-2 whitespace-pre-wrap text-[13px] leading-relaxed line-clamp-4 ${
+              isHidden ? "font-mono tracking-widest text-muted-dim" : "text-muted"
+            }`}
+          >
+            {displayAnswer}
           </p>
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
+          {item.sensitive && (
+            <button
+              type="button"
+              onClick={() => void toggleReveal()}
+              disabled={revealing}
+              className="admin-toolbar-btn inline-flex items-center gap-1.5 py-1.5 text-xs"
+              title={revealed ? "Hide answer" : "Reveal answer"}
+            >
+              {revealed ? (
+                <EyeOff className="h-3.5 w-3.5" />
+              ) : (
+                <Eye className="h-3.5 w-3.5" />
+              )}
+              {revealing ? "…" : revealed ? "Hide" : "Reveal"}
+            </button>
+          )}
           <button
             type="button"
-            onClick={() => onCopy(item.id, item.answer)}
+            onClick={() => onCopy(item.id, revealedAnswer ?? item.answer, item.sensitive)}
             className="admin-toolbar-btn inline-flex items-center gap-1.5 py-1.5 text-xs"
           >
             <Copy className="h-3.5 w-3.5" />
@@ -491,6 +571,25 @@ function PlaybookFormModal({
               placeholder="TOOLQZ is a curated directory of…"
             />
           </div>
+
+          <label className="flex items-start gap-2 rounded-lg border border-dark-border bg-dark/60 p-3 text-sm text-muted">
+            <input
+              type="checkbox"
+              checked={form.sensitive}
+              onChange={(e) => onChange({ ...form, sensitive: e.target.checked })}
+              className="mt-0.5 h-4 w-4 shrink-0 rounded border-dark-border bg-dark accent-amber-400"
+            />
+            <span>
+              <span className="inline-flex items-center gap-1.5 font-medium text-white">
+                <Lock className="h-3.5 w-3.5 text-amber-200/90" />
+                Mark as sensitive
+              </span>
+              <span className="mt-1 block text-[11px] leading-relaxed text-muted-dim">
+                Encrypts the answer at rest (passwords, API keys, login details). Hidden in the list
+                until you click Reveal.
+              </span>
+            </span>
+          </label>
 
           <div>
             <label className="mb-1 block text-xs text-muted">Category</label>

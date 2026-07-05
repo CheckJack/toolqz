@@ -4,6 +4,12 @@ import {
   normalizePlaybookCategory,
   PLAYBOOK_CATEGORIES,
 } from "@/constants/admin-playbook";
+import {
+  preparePlaybookAnswerForStorage,
+  readPlaybookAnswer,
+  serializePlaybookSnippet,
+} from "@/lib/playbook-snippet";
+import { PLAYBOOK_MASKED_ANSWER } from "@/lib/playbook-secret";
 import { searchPlaybookSnippets } from "@/lib/playbook-search";
 
 export function serializeAgentPlaybookSnippet(
@@ -15,14 +21,23 @@ export function serializeAgentPlaybookSnippet(
     aliases: string | null;
     tags: string | null;
     pinned: boolean;
+    sensitive: boolean;
     sortOrder: number;
   },
-  extras?: { score?: number; matchReason?: string | null }
+  extras?: { score?: number; matchReason?: string | null; reveal?: boolean }
 ) {
+  const reveal = extras?.reveal === true;
+  const sensitive = snippet.sensitive;
+
   return {
     id: snippet.id,
     question: snippet.question,
-    answer: snippet.answer,
+    answer:
+      sensitive && !reveal
+        ? PLAYBOOK_MASKED_ANSWER
+        : readPlaybookAnswer(snippet.answer, sensitive),
+    sensitive,
+    answerHidden: sensitive && !reveal,
     category: snippet.category,
     aliases: snippet.aliases,
     tags: snippet.tags,
@@ -71,7 +86,9 @@ export async function searchPlaybookForAgent(args: Record<string, unknown>) {
 
   const ranked = searchPlaybookSnippets(rows, query).slice(0, limit);
   const snippets = ranked.map((row) =>
-    serializeAgentPlaybookSnippet(row.snippet, {
+    serializeAgentPlaybookSnippet(
+      { ...row.snippet, sensitive: row.snippet.sensitive ?? false },
+      {
       score: row.score,
       matchReason: row.matchReason,
     })
@@ -84,14 +101,17 @@ export async function searchPlaybookForAgent(args: Record<string, unknown>) {
     ])
   );
 
+  const top = snippets[0];
+
   return {
     query,
     total: rows.length,
     showing: snippets.length,
     snippets,
     countsByCategory,
-    topAnswer: snippets[0]?.answer ?? null,
-    topQuestion: snippets[0]?.question ?? null,
+    topAnswer: top?.answerHidden ? null : top?.answer ?? null,
+    topQuestion: top?.question ?? null,
+    topSensitive: top?.sensitive ?? false,
   };
 }
 
@@ -108,6 +128,7 @@ export async function createPlaybookSnippetForAgent(
   const aliases = typeof args.aliases === "string" ? args.aliases.trim() || null : null;
   const tags = typeof args.tags === "string" ? args.tags.trim() || null : null;
   const pinned = args.pinned === true;
+  const sensitive = args.sensitive === true;
 
   const maxOrder = await prisma.adminPlaybookSnippet.aggregate({
     where: { category },
@@ -117,17 +138,18 @@ export async function createPlaybookSnippetForAgent(
   const snippet = await prisma.adminPlaybookSnippet.create({
     data: {
       question,
-      answer,
+      answer: preparePlaybookAnswerForStorage(answer, sensitive),
       category,
       aliases,
       tags,
       pinned,
+      sensitive,
       sortOrder: (maxOrder._max.sortOrder ?? 0) + 1,
       createdById: userId,
     },
   });
 
-  return serializeAgentPlaybookSnippet(snippet);
+  return serializeAgentPlaybookSnippet(snippet, { reveal: !sensitive });
 }
 
 export async function updatePlaybookSnippetForAgent(args: Record<string, unknown>) {
@@ -136,6 +158,9 @@ export async function updatePlaybookSnippetForAgent(args: Record<string, unknown
     throw new Error("Playbook snippet not found — provide snippet_id or snippet_question");
   }
 
+  const nextSensitive =
+    args.sensitive !== undefined ? Boolean(args.sensitive) : existing.sensitive;
+
   const data: {
     question?: string;
     answer?: string;
@@ -143,6 +168,7 @@ export async function updatePlaybookSnippetForAgent(args: Record<string, unknown
     aliases?: string | null;
     tags?: string | null;
     pinned?: boolean;
+    sensitive?: boolean;
   } = {};
 
   if (args.question !== undefined) {
@@ -154,7 +180,10 @@ export async function updatePlaybookSnippetForAgent(args: Record<string, unknown
   if (args.answer !== undefined) {
     const answer = typeof args.answer === "string" ? args.answer.trim() : "";
     if (!answer) throw new Error("answer cannot be empty");
-    data.answer = answer;
+    data.answer = preparePlaybookAnswerForStorage(answer, nextSensitive);
+  } else if (args.sensitive !== undefined && nextSensitive !== existing.sensitive) {
+    const currentPlain = readPlaybookAnswer(existing.answer, existing.sensitive);
+    data.answer = preparePlaybookAnswerForStorage(currentPlain, nextSensitive);
   }
 
   if (args.category !== undefined) {
@@ -173,10 +202,14 @@ export async function updatePlaybookSnippetForAgent(args: Record<string, unknown
     data.pinned = Boolean(args.pinned);
   }
 
+  if (args.sensitive !== undefined) {
+    data.sensitive = nextSensitive;
+  }
+
   const snippet = await prisma.adminPlaybookSnippet.update({
     where: { id: existing.id },
     data,
   });
 
-  return serializeAgentPlaybookSnippet(snippet);
+  return serializeAgentPlaybookSnippet(snippet, { reveal: !snippet.sensitive });
 }

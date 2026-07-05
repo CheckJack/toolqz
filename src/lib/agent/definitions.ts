@@ -592,6 +592,10 @@ export const AGENT_FUNCTION_DECLARATIONS = [
         },
         tags: { type: "string" },
         pinned: { type: "boolean" },
+        sensitive: {
+          type: "boolean",
+          description: "Encrypt and hide answer (passwords, API keys, logins)",
+        },
       },
       required: ["question", "answer"],
     },
@@ -599,7 +603,7 @@ export const AGENT_FUNCTION_DECLARATIONS = [
   {
     name: "update_playbook_snippet",
     description:
-      "Update a Playbook snippet by snippet_id or snippet_question. Can change question, answer, category, aliases, tags, pinned.",
+      "Update a Playbook snippet by snippet_id or snippet_question. Can change question, answer, category, aliases, tags, pinned, sensitive.",
     parameters: {
       type: "object",
       properties: {
@@ -611,6 +615,7 @@ export const AGENT_FUNCTION_DECLARATIONS = [
         aliases: { type: "string" },
         tags: { type: "string" },
         pinned: { type: "boolean" },
+        sensitive: { type: "boolean" },
       },
     },
   },

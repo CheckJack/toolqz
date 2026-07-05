@@ -40,6 +40,7 @@ export interface PlaybookSearchSnippet {
   aliases: string | null;
   tags: string | null;
   pinned: boolean;
+  sensitive?: boolean;
   sortOrder: number;
 }
 
@@ -139,14 +140,16 @@ export function scorePlaybookSnippet(
     }
   }
 
-  if (answerNorm.includes(query)) {
-    score = Math.max(score, 25);
-    matchReason = matchReason ?? "Answer contains phrase";
-  } else {
-    const aOverlap = wordOverlapScore(rawQuery, snippet.answer);
-    if (aOverlap >= 25) {
-      score = Math.max(score, aOverlap);
-      matchReason = matchReason ?? "Answer keywords";
+  if (!snippet.sensitive) {
+    if (answerNorm.includes(query)) {
+      score = Math.max(score, 25);
+      matchReason = matchReason ?? "Answer contains phrase";
+    } else {
+      const aOverlap = wordOverlapScore(rawQuery, snippet.answer);
+      if (aOverlap >= 25) {
+        score = Math.max(score, aOverlap);
+        matchReason = matchReason ?? "Answer keywords";
+      }
     }
   }
 
