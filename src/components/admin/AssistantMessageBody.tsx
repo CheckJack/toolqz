@@ -97,22 +97,39 @@ function StatCard({ card }: { card: Extract<AssistantCard, { type: "stats" }> })
   );
 }
 
-function RankedListCard({ card }: { card: Extract<AssistantCard, { type: "ranked_list" }> }) {
+function RankedListCard({
+  card,
+  compact = false,
+}: {
+  card: Extract<AssistantCard, { type: "ranked_list" }>;
+  compact?: boolean;
+}) {
   return (
     <div className="overflow-hidden rounded-xl border border-dark-border/80 bg-dark/60">
       <p className="border-b border-dark-border/60 px-3 py-2 text-[11px] font-medium uppercase tracking-wide text-muted">
         {card.title}
       </p>
-      <ul className="divide-y divide-dark-border/50">
+      <ul className={`divide-y divide-dark-border/50 ${compact ? "max-h-64 overflow-y-auto" : ""}`}>
         {card.items.map((item, i) => {
-          const inner = (
+          const meta = [item.value, item.hint].filter(Boolean).join(" · ");
+          const inner = compact ? (
             <>
               <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-neon/10 text-[10px] font-semibold text-neon">
                 {i + 1}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[13px] text-white">{item.label}</span>
+              <div className="min-w-0 flex-1">
+                <p className="text-[13px] leading-snug text-white">{item.label}</p>
+                {meta && <p className="mt-0.5 text-[11px] leading-snug text-muted">{meta}</p>}
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-neon/10 text-[10px] font-semibold text-neon">
+                {i + 1}
+              </span>
+              <span className="min-w-0 flex-1 text-[13px] text-white">{item.label}</span>
               {item.value !== undefined && (
-                <span className="shrink-0 text-[13px] tabular-nums text-muted">
+                <span className="max-w-[48%] shrink truncate text-right text-[12px] tabular-nums text-muted">
                   {item.value}
                   {item.hint ? ` ${item.hint}` : ""}
                 </span>
@@ -125,12 +142,18 @@ function RankedListCard({ card }: { card: Extract<AssistantCard, { type: "ranked
               {item.href ? (
                 <Link
                   href={item.href}
-                  className="flex items-center gap-2 px-3 py-2 transition hover:bg-neon/5"
+                  className={`flex gap-2 px-3 py-2 transition hover:bg-neon/5 ${
+                    compact ? "items-start" : "items-center"
+                  }`}
                 >
                   {inner}
                 </Link>
               ) : (
-                <div className="flex items-center gap-2 px-3 py-2">{inner}</div>
+                <div
+                  className={`flex gap-2 px-3 py-2 ${compact ? "items-start" : "items-center"}`}
+                >
+                  {inner}
+                </div>
               )}
             </li>
           );
@@ -140,7 +163,13 @@ function RankedListCard({ card }: { card: Extract<AssistantCard, { type: "ranked
   );
 }
 
-function ToolListCard({ card }: { card: Extract<AssistantCard, { type: "tool_list" }> }) {
+function ToolListCard({
+  card,
+  compact = false,
+}: {
+  card: Extract<AssistantCard, { type: "tool_list" }>;
+  compact?: boolean;
+}) {
   return (
     <div className="overflow-hidden rounded-xl border border-dark-border/80 bg-dark/60">
       <div className="flex items-center justify-between border-b border-dark-border/60 px-3 py-2">
@@ -154,28 +183,34 @@ function ToolListCard({ card }: { card: Extract<AssistantCard, { type: "tool_lis
           </span>
         )}
       </div>
-      <ul className="divide-y divide-dark-border/50">
+      <ul className={`divide-y divide-dark-border/50 ${compact ? "max-h-64 overflow-y-auto" : ""}`}>
         {card.tools.map((tool) => (
           <li key={tool.slug}>
             <Link
               href={tool.editUrl}
-              className="flex items-center gap-2 px-3 py-2 transition hover:bg-neon/5"
+              className={`flex gap-2 px-3 py-2 transition hover:bg-neon/5 ${
+                compact ? "flex-col items-stretch" : "items-center"
+              }`}
             >
-              <span className="min-w-0 flex-1 truncate text-[13px] text-white">{tool.name}</span>
-              <span
-                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                  tool.published
-                    ? "bg-emerald-500/15 text-emerald-400"
-                    : "bg-dark-border text-muted"
-                }`}
-              >
-                {tool.published ? "Live" : "Draft"}
+              <span className={`text-[13px] text-white ${compact ? "leading-snug" : "min-w-0 flex-1 truncate"}`}>
+                {tool.name}
               </span>
-              {tool.listingType && (
-                <span className="shrink-0 rounded-full bg-dark-border px-2 py-0.5 text-[10px] text-muted">
-                  {tool.listingType === "AFFILIATE" ? "Partner" : "Editorial"}
+              <div className={`flex flex-wrap gap-1.5 ${compact ? "" : "shrink-0"}`}>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    tool.published
+                      ? "bg-emerald-500/15 text-emerald-400"
+                      : "bg-dark-border text-muted"
+                  }`}
+                >
+                  {tool.published ? "Live" : "Draft"}
                 </span>
-              )}
+                {tool.listingType && (
+                  <span className="rounded-full bg-dark-border px-2 py-0.5 text-[10px] text-muted">
+                    {tool.listingType === "AFFILIATE" ? "Partner" : "Editorial"}
+                  </span>
+                )}
+              </div>
             </Link>
           </li>
         ))}
@@ -184,7 +219,13 @@ function ToolListCard({ card }: { card: Extract<AssistantCard, { type: "tool_lis
   );
 }
 
-function AffiliateListCard({ card }: { card: Extract<AssistantCard, { type: "affiliate_list" }> }) {
+function AffiliateListCard({
+  card,
+  compact = false,
+}: {
+  card: Extract<AssistantCard, { type: "affiliate_list" }>;
+  compact?: boolean;
+}) {
   const statusColor: Record<string, string> = {
     ACTIVE: "text-emerald-400",
     IN_PROGRESS: "text-sky-400",
@@ -205,31 +246,35 @@ function AffiliateListCard({ card }: { card: Extract<AssistantCard, { type: "aff
           </span>
         )}
       </div>
-      <ul className="divide-y divide-dark-border/50">
+      <ul className={`divide-y divide-dark-border/50 ${compact ? "max-h-64 overflow-y-auto" : ""}`}>
         {card.affiliates.map((a) => (
           <li key={a.editUrl}>
             <Link
               href={a.editUrl}
-              className="flex items-center gap-2 px-3 py-2 transition hover:bg-neon/5"
+              className={`flex gap-2 px-3 py-2 transition hover:bg-neon/5 ${
+                compact ? "flex-col items-stretch" : "items-center"
+              }`}
             >
-              <span className="min-w-0 flex-1 truncate text-[13px] text-white">
+              <span className={`text-[13px] text-white ${compact ? "leading-snug" : "min-w-0 flex-1 truncate"}`}>
                 {a.companyName}
               </span>
-              <span
-                className={`shrink-0 text-[10px] font-medium ${statusColor[a.status] ?? "text-muted"}`}
-              >
-                {a.status.replace(/_/g, " ")}
-              </span>
-              {!a.hasTool && (
-                <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-300">
-                  No tool
+              <div className={`flex flex-wrap gap-1.5 ${compact ? "" : "shrink-0"}`}>
+                <span
+                  className={`text-[10px] font-medium ${statusColor[a.status] ?? "text-muted"}`}
+                >
+                  {a.status.replace(/_/g, " ")}
                 </span>
-              )}
-              {a.hasPortal === false && (
-                <span className="shrink-0 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-300">
-                  No portal
-                </span>
-              )}
+                {!a.hasTool && (
+                  <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-300">
+                    No tool
+                  </span>
+                )}
+                {a.hasPortal === false && (
+                  <span className="rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[9px] text-amber-300">
+                    No portal
+                  </span>
+                )}
+              </div>
             </Link>
           </li>
         ))}
@@ -291,20 +336,22 @@ function AssistantCardView({
   card,
   onPrompt,
   onConfirm,
+  compact = false,
 }: {
   card: AssistantCard;
   onPrompt?: (text: string) => void;
   onConfirm?: (token: string) => void;
+  compact?: boolean;
 }) {
   switch (card.type) {
     case "stats":
       return <StatCard card={card} />;
     case "ranked_list":
-      return <RankedListCard card={card} />;
+      return <RankedListCard card={card} compact={compact} />;
     case "tool_list":
-      return <ToolListCard card={card} />;
+      return <ToolListCard card={card} compact={compact} />;
     case "affiliate_list":
-      return <AffiliateListCard card={card} />;
+      return <AffiliateListCard card={card} compact={compact} />;
     case "alert":
       return <AlertCard card={card} onPrompt={onPrompt} onConfirm={onConfirm} />;
     default:
@@ -317,11 +364,13 @@ export function AssistantMessageBody({
   cards,
   onPrompt,
   onConfirm,
+  compact = false,
 }: {
   content: string;
   cards?: AssistantCard[];
   onPrompt?: (text: string) => void;
   onConfirm?: (token: string) => void;
+  compact?: boolean;
 }) {
   const hasCards = cards && cards.length > 0;
 
@@ -340,6 +389,7 @@ export function AssistantMessageBody({
               card={card}
               onPrompt={onPrompt}
               onConfirm={onConfirm}
+              compact={compact}
             />
           ))}
         </div>

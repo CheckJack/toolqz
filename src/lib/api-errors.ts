@@ -21,7 +21,17 @@ export function handleApiError(error: unknown, fallback = "Request failed") {
         typeof error.meta?.table === "string" ? error.meta.table : "a required";
       return NextResponse.json(
         {
-          error: `Database is missing the ${table} table. Run \`npm run db:migrate:prod\` on the server (or \`npm run db:migrate\` locally).`,
+          error: `Database is missing the ${table} table. Run \`npm run db:migrate:prod\` from your Mac with Supabase DATABASE_URL and DIRECT_URL.`,
+        },
+        { status: 503 }
+      );
+    }
+    if (error.code === "P2022") {
+      const column =
+        typeof error.meta?.column === "string" ? error.meta.column : "a required column";
+      return NextResponse.json(
+        {
+          error: `Database schema is out of date (missing ${column}). Run \`npm run db:migrate:prod\` from your Mac with Supabase DATABASE_URL and DIRECT_URL.`,
         },
         { status: 503 }
       );
