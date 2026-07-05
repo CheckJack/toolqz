@@ -14,12 +14,15 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   images: {
+    formats: ["image/avif", "image/webp"],
     remotePatterns: [
       { protocol: "https", hostname: "placehold.co" },
       { protocol: "https", hostname: "www.google.com" },
       { protocol: "https", hostname: "cdn.simpleicons.org" },
       { protocol: "https", hostname: "image.mux.com" },
       { protocol: "https", hostname: "stream.mux.com" },
+      { protocol: "https", hostname: "**" },
+      { protocol: "http", hostname: "localhost" },
     ],
   },
   async headers() {

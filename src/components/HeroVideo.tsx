@@ -4,26 +4,29 @@ import { useEffect, useRef, useState } from "react";
 
 const MUX_PLAYBACK_ID = "r6pXRAJb3005XEEbl1hYU1x01RFJDSn7KQApwNGgAHHbU";
 const HERO_VIDEO_SRC = `https://stream.mux.com/${MUX_PLAYBACK_ID}.m3u8`;
-const HERO_VIDEO_POSTER = `https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.jpg?time=0`;
+const HERO_VIDEO_POSTER = `https://image.mux.com/${MUX_PLAYBACK_ID}/thumbnail.jpg?time=0&width=1920`;
 
-function lockToHighestQuality(hls: {
-  levels: { height: number }[];
-  currentLevel: number;
-}) {
-  const maxLevel = hls.levels.length - 1;
-  if (maxLevel >= 0) {
-    hls.currentLevel = maxLevel;
-  }
+function prefersStaticHero(): boolean {
+  if (typeof window === "undefined") return true;
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return true;
+  if (window.matchMedia("(max-width: 767px)").matches) return true;
+
+  const connection = (
+    navigator as Navigator & { connection?: { saveData?: boolean } }
+  ).connection;
+  if (connection?.saveData) return true;
+
+  return false;
 }
 
 export function HeroVideo() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const [staticHero, setStaticHero] = useState(true);
 
   useEffect(() => {
-    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduceMotion(motionQuery.matches);
-    if (motionQuery.matches) return;
+    if (prefersStaticHero()) return;
+    setStaticHero(false);
 
     const video = videoRef.current;
     if (!video) return;
@@ -37,21 +40,10 @@ export function HeroVideo() {
       if (Hls.isSupported()) {
         const instance = new Hls({
           enableWorker: true,
-          capLevelToPlayerSize: false,
+          capLevelToPlayerSize: true,
           startLevel: -1,
-          maxBufferLength: 30,
-          maxMaxBufferLength: 60,
-        });
-
-        instance.on(Hls.Events.MANIFEST_PARSED, () => {
-          lockToHighestQuality(instance);
-        });
-
-        instance.on(Hls.Events.LEVEL_SWITCHED, () => {
-          const maxLevel = instance.levels.length - 1;
-          if (maxLevel >= 0 && instance.currentLevel !== maxLevel) {
-            instance.currentLevel = maxLevel;
-          }
+          maxBufferLength: 15,
+          maxMaxBufferLength: 30,
         });
 
         instance.loadSource(HERO_VIDEO_SRC);
@@ -76,16 +68,27 @@ export function HeroVideo() {
       className="pointer-events-none fixed inset-0 z-0 overflow-hidden"
       aria-hidden
     >
-      <video
-        ref={videoRef}
-        className="absolute left-1/2 top-1/2 min-h-full min-w-full -translate-x-1/2 -translate-y-1/2 object-cover"
-        autoPlay={!reduceMotion}
-        muted
-        loop
-        playsInline
-        poster={HERO_VIDEO_POSTER}
-        preload={reduceMotion ? "none" : "auto"}
-      />
+      {staticHero ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={HERO_VIDEO_POSTER}
+          alt=""
+          fetchPriority="high"
+          decoding="async"
+          className="absolute left-1/2 top-1/2 min-h-full min-w-full -translate-x-1/2 -translate-y-1/2 object-cover"
+        />
+      ) : (
+        <video
+          ref={videoRef}
+          className="absolute left-1/2 top-1/2 min-h-full min-w-full -translate-x-1/2 -translate-y-1/2 object-cover"
+          autoPlay
+          muted
+          loop
+          playsInline
+          poster={HERO_VIDEO_POSTER}
+          preload="none"
+        />
+      )}
       <div className="absolute inset-0 bg-dark/45" />
       <div className="absolute inset-0 bg-gradient-to-b from-dark/20 via-dark/40 to-dark/85" />
     </div>

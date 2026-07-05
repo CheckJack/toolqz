@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import { canOptimizeImage } from "@/lib/images";
 
 export function ScreenshotGallery({
   screenshots,
@@ -23,7 +24,8 @@ export function ScreenshotGallery({
           fill
           className="object-cover"
           sizes="(max-width: 768px) 100vw, 896px"
-          unoptimized
+          priority
+          unoptimized={!canOptimizeImage(screenshots[active])}
         />
       </div>
       {screenshots.length > 1 && (
@@ -45,7 +47,7 @@ export function ScreenshotGallery({
                 fill
                 className="object-cover"
                 sizes="112px"
-                unoptimized
+                unoptimized={!canOptimizeImage(src)}
               />
             </button>
           ))}

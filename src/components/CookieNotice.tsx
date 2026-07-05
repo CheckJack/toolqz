@@ -69,7 +69,7 @@ export function CookieNotice() {
             href="/cookies"
             className="btn-ghost min-h-11 border border-dark-border px-4 py-2.5 text-center text-[13px]"
           >
-            Learn more
+            Cookie policy details
           </Link>
           <button type="button" onClick={accept} className="btn-primary px-5 py-2.5 text-[13px]">
             Accept cookies

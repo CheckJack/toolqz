@@ -3,6 +3,7 @@ import { ScrollReveal } from "@/components/motion/ScrollReveal";
 import { ToolDetailLink } from "@/components/ToolDetailLink";
 import { ToolLogo } from "@/components/tool-detail/ToolLogo";
 import { formatReviewed, getPricingHint } from "@/lib/homepage";
+import { canOptimizeImage } from "@/lib/images";
 import { getCategoryLabel, getDomain } from "@/lib/websites";
 import { Website } from "@/types";
 
@@ -19,6 +20,8 @@ export function WebsiteCard({ website, index = 0, trackNewsletterIntent = false 
   const screenshot = website.screenshots[0];
 
   const isFirstScreen = index < 6;
+  const screenshotAlt = `${website.name} product screenshot`;
+  const optimizeScreenshot = screenshot ? canOptimizeImage(screenshot) : false;
 
   return (
     <ScrollReveal
@@ -31,16 +34,18 @@ export function WebsiteCard({ website, index = 0, trackNewsletterIntent = false 
         slug={website.slug}
         trackNewsletterIntent={trackNewsletterIntent}
         className="relative block overflow-hidden"
+        aria-label={`View ${website.name} review`}
       >
         {screenshot ? (
           <div className="relative aspect-[16/10] w-full bg-dark-surface">
             <Image
               src={screenshot}
-              alt=""
+              alt={screenshotAlt}
               fill
               className="object-cover transition-transform duration-500 group-hover:scale-[1.02]"
               sizes="(max-width: 768px) 100vw, 33vw"
-              unoptimized
+              priority={index < 3}
+              unoptimized={!optimizeScreenshot}
             />
           </div>
         ) : (
@@ -58,9 +63,9 @@ export function WebsiteCard({ website, index = 0, trackNewsletterIntent = false 
                 trackNewsletterIntent={trackNewsletterIntent}
                 className="block truncate"
               >
-                <h3 className="truncate text-[15px] font-medium tracking-[-0.02em] text-white transition-colors group-hover:text-neon">
+                <h2 className="truncate text-[15px] font-medium tracking-[-0.02em] text-white transition-colors group-hover:text-neon">
                   {website.name}
-                </h3>
+                </h2>
               </ToolDetailLink>
               <p className="truncate text-[12px] text-muted-dim">{domain}</p>
             </div>

@@ -3,7 +3,7 @@ import { HomePage } from "@/components/HomePage";
 import { getPublishedCategories } from "@/lib/categories";
 import { getPublishedTools } from "@/lib/tools";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export default async function Page() {
   let websites: Awaited<ReturnType<typeof getPublishedTools>> = [];
