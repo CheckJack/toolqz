@@ -140,6 +140,17 @@ export function AdminLoginForm() {
           >
             {loading ? "Signing in..." : "Sign in"}
           </button>
+
+          <p className="pt-1 text-center text-sm text-muted">
+            <Link
+              href="/admin/login/forgot-password"
+              className="font-medium text-neon hover:underline"
+            >
+              Forgot your password?
+            </Link>
+            <span className="mx-1.5 text-muted-dim">·</span>
+            <span className="text-muted-dim">We&apos;ll email you a reset link</span>
+          </p>
         </form>
     </AdminAuthShell>
   );
