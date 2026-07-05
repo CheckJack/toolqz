@@ -498,6 +498,7 @@ export function AdminAssistantChat({
                     cards={msg.cards}
                     onPrompt={(text) => send(text)}
                     onConfirm={runConfirm}
+                    compact={isWidget}
                   />
                 )}
                 {msg.receipts && msg.receipts.length > 0 && (
