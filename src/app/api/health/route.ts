@@ -12,6 +12,15 @@ export async function GET() {
 
   try {
     await prisma.$queryRaw`SELECT 1`;
+    // Catches pending migrations (e.g. missing User columns) that SELECT 1 alone would miss.
+    await prisma.user.findFirst({
+      select: {
+        id: true,
+        emailBuildAlerts: true,
+        emailTaskDigest: true,
+        emailMessageAlerts: true,
+      },
+    });
     database = "ok";
   } catch (error) {
     database = "error";

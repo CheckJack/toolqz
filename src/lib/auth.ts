@@ -91,10 +91,27 @@ export async function requireAdmin() {
 }
 
 export async function authenticateUser(email: string, password: string) {
-  const user = await prisma.user.findUnique({ where: { email } });
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return null;
+
+  const user = await prisma.user.findUnique({
+    where: { email: normalized },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      passwordHash: true,
+    },
+  });
   if (!user) return null;
 
-  const valid = await verifyPassword(password, user.passwordHash);
+  let valid = false;
+  try {
+    valid = await verifyPassword(password, user.passwordHash);
+  } catch {
+    return null;
+  }
   if (!valid) return null;
 
   return {

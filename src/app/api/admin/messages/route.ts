@@ -158,7 +158,10 @@ export async function POST(request: NextRequest) {
       if (toUserId === session.id) {
         return NextResponse.json({ error: "Cannot message yourself" }, { status: 400 });
       }
-      const other = await prisma.user.findUnique({ where: { id: toUserId } });
+      const other = await prisma.user.findUnique({
+        where: { id: toUserId },
+        select: { id: true },
+      });
       if (!other) {
         return NextResponse.json({ error: "User not found" }, { status: 404 });
       }

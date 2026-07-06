@@ -28,7 +28,8 @@ export async function POST(request: NextRequest) {
       // Non-fatal if schema/client is out of sync
     }
     return NextResponse.json({ user });
-  } catch {
+  } catch (error) {
+    console.error("POST /api/auth/login:", error);
     return NextResponse.json({ error: "Login failed" }, { status: 500 });
   }
 }
