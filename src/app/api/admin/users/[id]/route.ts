@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { hashPassword, requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/audit-log";
 import { prisma } from "@/lib/db";
+import { isPasswordLongEnough, passwordTooShortMessage } from "@/lib/password-policy";
 
 export async function PATCH(
   request: NextRequest,
@@ -26,11 +27,8 @@ export async function PATCH(
       data.emailFollowUpReminders = Boolean(body.emailFollowUpReminders);
     }
     if (body.password) {
-      if (String(body.password).length < 6) {
-        return NextResponse.json(
-          { error: "Password must be at least 6 characters" },
-          { status: 400 }
-        );
+      if (!isPasswordLongEnough(String(body.password))) {
+        return NextResponse.json({ error: passwordTooShortMessage() }, { status: 400 });
       }
       data.passwordHash = await hashPassword(String(body.password));
     }

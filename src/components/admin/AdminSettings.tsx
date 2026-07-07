@@ -7,6 +7,7 @@ import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { EmailReminderSetting } from "@/components/admin/EmailReminderSetting";
 import { useToast } from "@/components/admin/Toast";
+import { MIN_PASSWORD_LENGTH, passwordTooShortMessage } from "@/lib/password-policy";
 
 interface ProfileData {
   id: string;
@@ -103,8 +104,8 @@ export function AdminSettings() {
 
   async function savePassword(e: React.FormEvent) {
     e.preventDefault();
-    if (newPassword.length < 6) {
-      toast("New password must be at least 6 characters", "error");
+    if (newPassword.length < MIN_PASSWORD_LENGTH) {
+      toast(passwordTooShortMessage(), "error");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -261,7 +262,7 @@ export function AdminSettings() {
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               className={inputClass}
-              minLength={6}
+              minLength={MIN_PASSWORD_LENGTH}
               autoComplete="new-password"
             />
           </div>
@@ -272,7 +273,7 @@ export function AdminSettings() {
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               className={inputClass}
-              minLength={6}
+              minLength={MIN_PASSWORD_LENGTH}
               autoComplete="new-password"
             />
           </div>

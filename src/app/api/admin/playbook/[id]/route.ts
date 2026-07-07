@@ -32,6 +32,10 @@ export async function GET(
       return NextResponse.json({ error: "Snippet not found" }, { status: 404 });
     }
 
+    if (reveal && snippet.sensitive && session.role !== "ADMIN") {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     if (reveal && snippet.sensitive) {
       await logAudit("reveal", "playbook", `Revealed sensitive playbook "${snippet.question}"`, {
         userId: session.id,

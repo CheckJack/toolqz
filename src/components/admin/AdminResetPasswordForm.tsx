@@ -8,6 +8,7 @@ import {
   ADMIN_FORGOT_PASSWORD_PATH,
   ADMIN_SIGN_IN_PATH,
 } from "@/lib/auth-routes";
+import { MIN_PASSWORD_LENGTH, passwordTooShortMessage } from "@/lib/password-policy";
 
 function AdminResetPasswordFormInner() {
   const router = useRouter();
@@ -46,8 +47,8 @@ function AdminResetPasswordFormInner() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters");
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(passwordTooShortMessage());
       return;
     }
     if (password !== confirmPassword) {
@@ -138,7 +139,7 @@ function AdminResetPasswordFormInner() {
               }}
               autoComplete="new-password"
               className={`${adminAuthInputClass} pr-12`}
-              minLength={6}
+              minLength={MIN_PASSWORD_LENGTH}
               required
             />
             <button
@@ -163,7 +164,7 @@ function AdminResetPasswordFormInner() {
             }}
             autoComplete="new-password"
             className={adminAuthInputClass}
-            minLength={6}
+            minLength={MIN_PASSWORD_LENGTH}
             required
           />
         </div>

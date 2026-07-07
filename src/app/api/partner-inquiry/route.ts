@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { partnerInquiryEmail } from "@/lib/email-templates";
 import { sendEmail } from "@/lib/email";
+import { enforceRateLimit } from "@/lib/rate-limit";
+
+const INQUIRY_LIMIT = 5;
+const INQUIRY_WINDOW_MS = 60 * 60 * 1000;
 
 const PRODUCT_TYPES = new Set(["saas", "digital", "service", "app", "other"]);
 
@@ -10,6 +14,9 @@ function isValidEmail(value: string) {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, "partner-inquiry", INQUIRY_LIMIT, INQUIRY_WINDOW_MS);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
 

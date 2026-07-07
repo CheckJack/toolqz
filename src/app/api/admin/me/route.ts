@@ -8,6 +8,7 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { isPasswordLongEnough, passwordTooShortMessage } from "@/lib/password-policy";
 
 export async function GET() {
   try {
@@ -76,11 +77,8 @@ export async function PATCH(request: NextRequest) {
       const currentPassword =
         typeof body.currentPassword === "string" ? body.currentPassword : "";
 
-      if (newPassword.length < 6) {
-        return NextResponse.json(
-          { error: "New password must be at least 6 characters." },
-          { status: 400 }
-        );
+      if (!isPasswordLongEnough(newPassword)) {
+        return NextResponse.json({ error: passwordTooShortMessage() }, { status: 400 });
       }
       if (!currentPassword) {
         return NextResponse.json(

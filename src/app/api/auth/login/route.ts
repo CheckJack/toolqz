@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession, destroySession, authenticateUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import { enforceRateLimit } from "@/lib/rate-limit";
+
+const LOGIN_LIMIT = 10;
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, "auth-login", LOGIN_LIMIT, LOGIN_WINDOW_MS);
+  if (limited) return limited;
+
   try {
     const { email, password } = await request.json();
 

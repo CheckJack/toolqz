@@ -17,7 +17,6 @@ import { AdminAffiliateKanban } from "@/components/admin/AdminAffiliateKanban";
 import { useToast } from "@/components/admin/Toast";
 import { AFFILIATE_CATEGORIES } from "@/constants/affiliate-categories";
 import { parseCsv } from "@/lib/csv-parse";
-import { parseAffiliateXlsx } from "@/lib/parse-xlsx";
 import { canEditAffiliateRow } from "@/lib/affiliate-access";
 import { SessionUser } from "@/lib/auth";
 import {
@@ -158,7 +157,6 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
   const [createForm, setCreateForm] = useState<AffiliateFormData>(emptyForm);
   const [createError, setCreateError] = useState("");
   const [importing, setImporting] = useState(false);
-  const [xlsxRows, setXlsxRows] = useState<AffiliateImportRow[] | null>(null);
   const [pendingEdits, setPendingEdits] = useState<Record<string, RowPendingEdit>>({});
   const [bulkWorking, setBulkWorking] = useState(false);
   const [selectingAll, setSelectingAll] = useState(false);
@@ -341,7 +339,7 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
   }
 
   async function handleImport() {
-    const rows = xlsxRows ?? parseImportCsv(importText);
+    const rows = parseImportCsv(importText);
     if (!rows.length) {
       toast("No valid rows found", "error");
       return;
@@ -359,7 +357,6 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
           `Created ${data.created}, updated ${data.updated}, skipped ${data.skipped}${data.errors?.length ? ` (${data.errors.length} errors)` : ""}`
         );
         toast("Import complete");
-        setXlsxRows(null);
         load();
       } else {
         toast(data.error ?? "Import failed", "error");
@@ -372,27 +369,10 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
   function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    const lower = file.name.toLowerCase();
-    if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const rows = parseAffiliateXlsx(reader.result as ArrayBuffer);
-        if (!rows.length) {
-          toast("No rows found in spreadsheet", "error");
-          return;
-        }
-        setXlsxRows(rows);
-        setImportText(`[${rows.length} rows loaded from ${file.name}]`);
-        toast(`Loaded ${rows.length} rows from Excel`);
-      };
-      reader.readAsArrayBuffer(file);
-      e.target.value = "";
-      return;
-    }
-    setXlsxRows(null);
     const reader = new FileReader();
     reader.onload = () => setImportText(String(reader.result ?? ""));
     reader.readAsText(file);
+    e.target.value = "";
   }
 
   async function exportCsv(ids?: string[]) {
@@ -573,12 +553,12 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
   }
 
   const previewRows = useMemo(
-    () => (xlsxRows ?? parseImportCsv(importText)).slice(0, 5),
-    [importText, xlsxRows]
+    () => parseImportCsv(importText).slice(0, 5),
+    [importText]
   );
   const importTotal = useMemo(
-    () => (xlsxRows ?? parseImportCsv(importText)).length,
-    [importText, xlsxRows]
+    () => parseImportCsv(importText).length,
+    [importText]
   );
 
   const categoryOptions = useMemo(() => {
@@ -1244,16 +1224,12 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
           >
             <h2 className="mb-2 text-lg font-semibold">Import programs</h2>
             <p className="mb-2 text-sm text-muted">
-              Upload CSV or Excel (.xlsx), or paste CSV with: Company Name, Category, Commission, Recurring?, Cookie Duration, Signup URL, Notes
+              Upload a CSV file or paste CSV with: Company Name, Category, Commission, Recurring?, Cookie Duration, Signup URL, Notes
             </p>
-            <input type="file" accept=".csv,.xlsx,.xls,text/csv" onChange={handleFileUpload} className="mb-4 text-sm text-muted" />
+            <input type="file" accept=".csv,text/csv" onChange={handleFileUpload} className="mb-4 text-sm text-muted" />
             <textarea
               value={importText}
-              onChange={(e) => {
-                setImportText(e.target.value);
-                setXlsxRows(null);
-              }}
-              disabled={!!xlsxRows}
+              onChange={(e) => setImportText(e.target.value)}
               className="mb-4 h-40 w-full rounded-xl border border-dark-border bg-dark p-3 text-sm text-white focus:outline-none"
               placeholder="Company Name,Category,Commission,..."
             />

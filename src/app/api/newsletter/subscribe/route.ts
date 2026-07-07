@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { welcomeNewsletterEmail } from "@/lib/email-templates";
 import { sendEmail } from "@/lib/email";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { isValidEmail, normalizeEmail } from "@/lib/subscribers";
+
+const SUBSCRIBE_LIMIT = 10;
+const SUBSCRIBE_WINDOW_MS = 60 * 60 * 1000;
 
 async function sendWelcomeEmail(email: string, name: string | null) {
   const { subject, text, html } = welcomeNewsletterEmail(name);
@@ -10,6 +14,9 @@ async function sendWelcomeEmail(email: string, name: string | null) {
 }
 
 export async function POST(request: NextRequest) {
+  const limited = enforceRateLimit(request, "newsletter-subscribe", SUBSCRIBE_LIMIT, SUBSCRIBE_WINDOW_MS);
+  if (limited) return limited;
+
   try {
     const body = await request.json();
 

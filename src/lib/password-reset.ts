@@ -4,6 +4,7 @@ import { logAudit } from "@/lib/audit-log";
 import { adminPasswordResetEmail } from "@/lib/email-templates";
 import { sendEmail } from "@/lib/email";
 import { prisma } from "@/lib/db";
+import { isPasswordLongEnough } from "@/lib/password-policy";
 
 const RESET_TTL_MS = 60 * 60 * 1000;
 
@@ -78,7 +79,7 @@ export async function validatePasswordResetToken(token: string) {
 
 export async function resetPasswordWithToken(token: string, newPassword: string) {
   const trimmed = token.trim();
-  if (!trimmed || newPassword.length < 6) {
+  if (!trimmed || !isPasswordLongEnough(newPassword)) {
     return { ok: false as const, error: "Invalid request." };
   }
 

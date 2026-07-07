@@ -5,14 +5,13 @@ import { isEmailConfigured } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+async function runHealthChecks() {
   const issues = getDeploymentIssues();
   let database = "unknown";
   let databaseError: string | null = null;
 
   try {
     await prisma.$queryRaw`SELECT 1`;
-    // Catches pending migrations (e.g. missing User columns) that SELECT 1 alone would miss.
     await prisma.user.findFirst({
       select: {
         id: true,
@@ -29,6 +28,27 @@ export async function GET() {
   }
 
   const healthy = issues.length === 0 && database === "ok";
+
+  return {
+    healthy,
+    database,
+    databaseError,
+    issues,
+  };
+}
+
+export async function GET() {
+  const { healthy, database, databaseError, issues } = await runHealthChecks();
+
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json(
+      {
+        status: healthy ? "ok" : "degraded",
+        timestamp: new Date().toISOString(),
+      },
+      { status: healthy ? 200 : 503 }
+    );
+  }
 
   return NextResponse.json(
     {

@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { SessionUser } from "@/lib/auth";
+import { MIN_PASSWORD_LENGTH, passwordTooShortMessage } from "@/lib/password-policy";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminRowActionsMenu } from "@/components/admin/AdminRowActionsMenu";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
@@ -209,8 +210,8 @@ export function AdminTeam({ currentUser }: { currentUser: SessionUser }) {
   }
 
   async function handlePasswordReset(id: string) {
-    if (resetPassword.length < 6) {
-      toast("Password must be at least 6 characters", "error");
+    if (resetPassword.length < MIN_PASSWORD_LENGTH) {
+      toast(passwordTooShortMessage(), "error");
       return;
     }
     setSaving(true);
@@ -518,7 +519,7 @@ export function AdminTeam({ currentUser }: { currentUser: SessionUser }) {
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   className={inputClass}
                   required
-                  minLength={6}
+                  minLength={MIN_PASSWORD_LENGTH}
                 />
               </div>
               <div>
@@ -618,7 +619,7 @@ export function AdminTeam({ currentUser }: { currentUser: SessionUser }) {
                 onChange={(e) => setResetPassword(e.target.value)}
                 placeholder="At least 6 characters"
                 className={inputClass}
-                minLength={6}
+                minLength={MIN_PASSWORD_LENGTH}
                 autoFocus
               />
             </div>

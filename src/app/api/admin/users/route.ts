@@ -3,6 +3,7 @@ import { handleAuthError } from "@/lib/api-errors";
 import { hashPassword, requireAdmin, requireSession } from "@/lib/auth";
 import { logAudit } from "@/lib/audit-log";
 import { prisma } from "@/lib/db";
+import { isPasswordLongEnough, passwordTooShortMessage } from "@/lib/password-policy";
 
 export async function GET() {
   try {
@@ -51,6 +52,10 @@ export async function POST(request: NextRequest) {
         { error: "Name, email, and password are required" },
         { status: 400 }
       );
+    }
+
+    if (!isPasswordLongEnough(password)) {
+      return NextResponse.json({ error: passwordTooShortMessage() }, { status: 400 });
     }
 
     const existing = await prisma.user.findUnique({
