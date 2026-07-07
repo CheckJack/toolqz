@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ExternalLink, LayoutGrid, ListTodo, Pencil, Search } from "lucide-react";
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AdminAffiliateForm,
   emptyForm,
@@ -265,7 +265,6 @@ export function AdminAffiliates({ user }: { user: SessionUser }) {
     setImportText("");
     setImportResult(null);
     setImporting(false);
-    setXlsxRows(null);
   }
 
   function clearPending(id: string) {
