@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { AFFILIATE_STATUSES } from "@/types/affiliate";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -11,24 +11,18 @@ import { DonutBreakdownChart } from "@/components/admin/charts/DonutBreakdownCha
 import { HorizontalBarChart } from "@/components/admin/charts/HorizontalBarChart";
 import { SessionUser } from "@/lib/auth";
 import { CHART, PIPELINE_COLORS, toDailyChartRows, toRankChartRows } from "@/lib/admin-charts";
+import type { DashboardData } from "@/lib/dashboard-analytics";
 
-interface DashboardData {
-  totalClicks: number;
-  todayClicks: number;
-  weekClicks: number;
-  monthClicks: number;
-  topTools: { toolId: string; name: string; slug: string; clicks: number }[];
-  dailyClicks: { date: string; count: number }[];
-  toolCount: number;
-  affiliateCounts: Record<string, number>;
-  unassignedCount: number;
-  followUpsDue: number;
-  myAssigned: number;
-  myOverdue: number;
-  myInProgress: number;
-  toolsMissingAffiliate: number;
-  programsNoTool: number;
-  userName: string;
+async function fetchDashboard(attempt = 0): Promise<DashboardData> {
+  const res = await fetch("/api/admin/analytics?mode=dashboard", { cache: "no-store" });
+  if (!res.ok) {
+    if (attempt < 2 && res.status >= 500) {
+      await new Promise((resolve) => setTimeout(resolve, 400 * (attempt + 1)));
+      return fetchDashboard(attempt + 1);
+    }
+    throw new Error("Failed");
+  }
+  return res.json() as Promise<DashboardData>;
 }
 
 const statusLinks: Record<string, string> = {
@@ -64,32 +58,34 @@ const statusBadge: Record<string, string> = {
   ON_HOLD: "bg-amber-400/10 text-amber-400",
 };
 
-export function AdminDashboard({ user }: { user: SessionUser }) {
-  const [data, setData] = useState<DashboardData | null>(null);
+export function AdminDashboard({
+  user,
+  initialData = null,
+}: {
+  user: SessionUser;
+  initialData?: DashboardData | null;
+}) {
+  const [data, setData] = useState<DashboardData | null>(initialData);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialData);
 
-  function loadDashboard() {
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError("");
-    fetch("/api/admin/analytics?mode=dashboard")
-      .then((r) => {
-        if (!r.ok) throw new Error("Failed");
-        return r.json();
-      })
-      .then((d) => {
-        setData(d);
-        setLoading(false);
-      })
-      .catch(() => {
-        setError("Failed to load dashboard");
-        setLoading(false);
-      });
-  }
+    try {
+      const next = await fetchDashboard();
+      setData(next);
+    } catch {
+      setError("Failed to load dashboard");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    loadDashboard();
-  }, []);
+    if (initialData) return;
+    void loadDashboard();
+  }, [initialData, loadDashboard]);
 
   async function exportOverdueCsv() {
     try {
@@ -113,7 +109,7 @@ export function AdminDashboard({ user }: { user: SessionUser }) {
     return (
       <div className="rounded-2xl border border-red-500/30 p-6 text-center text-red-400">
         {error}
-        <button type="button" onClick={loadDashboard} className="admin-link-accent mt-2">
+        <button type="button" onClick={() => void loadDashboard()} className="admin-link-accent mt-2">
           Retry
         </button>
       </div>

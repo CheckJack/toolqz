@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { queryDailyClicks } from "@/lib/analytics-queries";
 import { handleAuthError } from "@/lib/api-errors";
 import { requireSession } from "@/lib/auth";
+import { getDashboardAnalytics } from "@/lib/dashboard-analytics";
 import { prisma } from "@/lib/db";
 
 function getRangeStart(range: string): Date | null {
@@ -38,6 +39,10 @@ export async function GET(request: NextRequest) {
     const mode = request.nextUrl.searchParams.get("mode") ?? "full";
     const toolSlug = request.nextUrl.searchParams.get("tool");
 
+    if (mode === "dashboard") {
+      return NextResponse.json(await getDashboardAnalytics(session));
+    }
+
     const now = new Date();
     const startOfToday = new Date(now);
     startOfToday.setHours(0, 0, 0, 0);
@@ -68,11 +73,6 @@ export async function GET(request: NextRequest) {
       affiliateCounts,
       unassignedCount,
       followUpsDue,
-      myAssigned,
-      myOverdue,
-      myInProgress,
-      toolsMissingAffiliate,
-      programsNoTool,
     ] = await Promise.all([
       prisma.click.count(),
       prisma.click.count({ where: { clickedAt: { gte: startOfToday } } }),
@@ -107,19 +107,6 @@ export async function GET(request: NextRequest) {
           status: { notIn: ["ACTIVE", "REJECTED", "NOT_AVAILABLE"] },
         },
       }),
-      prisma.affiliateProgram.count({ where: { assignedToId: session.id } }),
-      prisma.affiliateProgram.count({
-        where: {
-          assignedToId: session.id,
-          nextFollowUpAt: { lt: now },
-          status: { notIn: ["ACTIVE", "REJECTED", "NOT_AVAILABLE"] },
-        },
-      }),
-      prisma.affiliateProgram.count({
-        where: { assignedToId: session.id, status: "IN_PROGRESS" },
-      }),
-      prisma.tool.count({ where: { published: true, affiliateUrl: null } }),
-      prisma.affiliateProgram.count({ where: { toolId: null } }),
     ]);
 
     const toolsWithClicks = allTools
@@ -139,29 +126,6 @@ export async function GET(request: NextRequest) {
     const affiliateClicks = toolsWithClicks
       .filter((t) => t.hasAffiliateUrl)
       .reduce((s, t) => s + t.clicks, 0);
-
-    if (mode === "dashboard") {
-      return NextResponse.json({
-        todayClicks,
-        weekClicks,
-        monthClicks,
-        totalClicks,
-        topTools,
-        dailyClicks,
-        toolCount,
-        affiliateCounts: Object.fromEntries(
-          affiliateCounts.map((a) => [a.status, a._count.id])
-        ),
-        unassignedCount,
-        followUpsDue,
-        myAssigned,
-        myOverdue,
-        myInProgress,
-        toolsMissingAffiliate,
-        programsNoTool,
-        userName: session.name,
-      });
-    }
 
     let toolDailyClicks: { date: string; count: number }[] | undefined;
     if (toolSlug) {

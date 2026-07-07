@@ -3,14 +3,22 @@ import { ADMIN_SIGN_IN_PATH } from "@/lib/auth-routes";
 import { AdminShell } from "@/components/admin/AdminShell";
 import { AdminDashboard } from "@/components/admin/AdminDashboard";
 import { getSession } from "@/lib/auth";
+import { getDashboardAnalytics } from "@/lib/dashboard-analytics";
 
 export default async function AdminPage() {
   const session = await getSession();
   if (!session) redirect(ADMIN_SIGN_IN_PATH);
 
+  let initialData = null;
+  try {
+    initialData = await getDashboardAnalytics(session);
+  } catch (error) {
+    console.error("[admin/dashboard] initial load failed:", error);
+  }
+
   return (
     <AdminShell user={session}>
-      <AdminDashboard user={session} />
+      <AdminDashboard user={session} initialData={initialData} />
     </AdminShell>
   );
 }
