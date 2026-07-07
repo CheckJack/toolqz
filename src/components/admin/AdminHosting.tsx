@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { ExternalLink, RefreshCw, Rocket, Server } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { AdminChartCard } from "@/components/admin/charts/AdminChartCard";
@@ -103,29 +103,51 @@ export function AdminHosting() {
   const [selectedBuild, setSelectedBuild] = useState<string | null>(null);
   const [logs, setLogs] = useState("");
   const [logsLoading, setLogsLoading] = useState(false);
+  const deployListRef = useRef<HTMLDivElement>(null);
+  const logsPanelRef = useRef<HTMLDivElement>(null);
 
-  const loadLogsForBuild = useCallback((uuid: string) => {
-    setSelectedBuild(uuid);
-    setLogsLoading(true);
-    setLogs("");
-    fetch(`/api/admin/hosting?logs=${encodeURIComponent(uuid)}`)
-      .then(async (r) => {
-        if (!r.ok) {
-          const body = await r.json().catch(() => ({}));
-          throw new Error(body.error ?? "Failed to load logs");
-        }
-        return r.json();
-      })
-      .then((body) => setLogs(body.logs ?? ""))
-      .catch((e: Error) => {
-        setLogs(e.message);
-        toast(e.message || "Failed to load logs", "error");
-      })
-      .finally(() => setLogsLoading(false));
-  }, [toast]);
+  const loadLogsForBuild = useCallback(
+    (uuid: string, options?: { restoreScrollTop?: number }) => {
+      setSelectedBuild(uuid);
+      setLogsLoading(true);
+      if (options?.restoreScrollTop === undefined) {
+        setLogs("");
+      }
+
+      fetch(`/api/admin/hosting?logs=${encodeURIComponent(uuid)}`)
+        .then(async (r) => {
+          if (!r.ok) {
+            const body = await r.json().catch(() => ({}));
+            throw new Error(body.error ?? "Failed to load logs");
+          }
+          return r.json();
+        })
+        .then((body) => setLogs(body.logs ?? ""))
+        .catch((e: Error) => {
+          setLogs(e.message);
+          toast(e.message || "Failed to load logs", "error");
+        })
+        .finally(() => {
+          setLogsLoading(false);
+          if (options?.restoreScrollTop !== undefined) {
+            requestAnimationFrame(() => {
+              if (logsPanelRef.current) {
+                logsPanelRef.current.scrollTop = options.restoreScrollTop ?? 0;
+              }
+            });
+          }
+        });
+    },
+    [toast]
+  );
 
   const load = useCallback(
-    (options?: { silent?: boolean }) => {
+    (options?: { silent?: boolean; preserveView?: boolean }) => {
+      const preserveView = options?.preserveView ?? false;
+      const savedDeployScroll = preserveView ? deployListRef.current?.scrollTop : undefined;
+      const savedLogsScroll = preserveView ? logsPanelRef.current?.scrollTop : undefined;
+      const buildToKeep = preserveView ? selectedBuild : null;
+
       if (options?.silent) setRefreshing(true);
       else setLoading(true);
       setError("");
@@ -140,13 +162,30 @@ export function AdminHosting() {
         })
         .then((body: HostingData) => {
           setData(body);
-          if (body.latestBuild?.uuid && body.configured) {
+
+          if (preserveView) {
+            if (buildToKeep && body.builds.some((build) => build.uuid === buildToKeep)) {
+              loadLogsForBuild(buildToKeep, { restoreScrollTop: savedLogsScroll });
+            } else if (buildToKeep) {
+              setSelectedBuild(null);
+              setLogs("");
+            }
+
+            requestAnimationFrame(() => {
+              if (savedDeployScroll !== undefined && deployListRef.current) {
+                deployListRef.current.scrollTop = savedDeployScroll;
+              }
+            });
+          } else if (body.latestBuild?.uuid && body.configured) {
             loadLogsForBuild(body.latestBuild.uuid);
           } else {
             setSelectedBuild(null);
             setLogs("");
           }
-          if (options?.silent) toast("Hosting data refreshed");
+
+          if (options?.silent) {
+            toast(preserveView ? "Recent deploys refreshed" : "Hosting data refreshed");
+          }
         })
         .catch((e: Error) => {
           const msg = e.message || "Failed to load hosting data";
@@ -158,7 +197,7 @@ export function AdminHosting() {
           setRefreshing(false);
         });
     },
-    [loadLogsForBuild, toast]
+    [loadLogsForBuild, selectedBuild, toast]
   );
 
   useEffect(() => {
@@ -363,12 +402,29 @@ export function AdminHosting() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="admin-card overflow-hidden">
-          <div className="border-b border-dark-border p-4 sm:p-5">
-            <h2 className="admin-section-title">Recent deploys</h2>
-            {!data.configured && (
-              <p className="mt-1 text-[12px] text-muted">
-                Configure HOSTINGER_API_TOKEN to see deploy history.
-              </p>
+          <div className="flex items-start justify-between gap-3 border-b border-dark-border p-4 sm:p-5">
+            <div className="min-w-0">
+              <h2 className="admin-section-title">Recent deploys</h2>
+              {!data.configured && (
+                <p className="mt-1 text-[12px] text-muted">
+                  Configure HOSTINGER_API_TOKEN to see deploy history.
+                </p>
+              )}
+            </div>
+            {data.configured && (
+              <button
+                type="button"
+                onClick={() => load({ silent: true, preserveView: true })}
+                disabled={refreshing}
+                className="admin-toolbar-btn shrink-0 disabled:opacity-50"
+                title="Refresh deploy list and logs without leaving your place"
+              >
+                <RefreshCw
+                  className={`h-3.5 w-3.5 shrink-0 opacity-70 ${refreshing ? "animate-spin" : ""}`}
+                  strokeWidth={1.75}
+                />
+                Refresh
+              </button>
             )}
           </div>
 
@@ -419,7 +475,7 @@ export function AdminHosting() {
                   </button>
                 </div>
               ) : (
-                <div className="max-h-80 overflow-x-auto overflow-y-auto">
+                <div ref={deployListRef} className="max-h-80 overflow-x-auto overflow-y-auto">
                   <table className="admin-table min-w-[20rem]">
                     <thead>
                       <tr>
@@ -472,7 +528,7 @@ export function AdminHosting() {
               <p className="mt-1 text-[12px] text-muted">Select a deploy to view its output.</p>
             )}
           </div>
-          <div className="relative max-h-80 min-h-[12rem] overflow-auto bg-dark/40 p-4">
+          <div ref={logsPanelRef} className="relative max-h-80 min-h-[12rem] overflow-auto bg-dark/40 p-4">
             {!selectedBuild ? (
               <div className="flex h-full min-h-[10rem] flex-col items-center justify-center text-center">
                 <Server className="mb-2 h-5 w-5 text-muted-dim" strokeWidth={1.75} />
