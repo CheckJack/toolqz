@@ -10,7 +10,6 @@ import {
   Mail,
   MessageSquare,
   ScrollText,
-  Send,
   Server,
   Users,
   Wallet,
@@ -46,7 +45,6 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     items: [
       { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
       { href: "/admin/hosting", label: "Hosting", icon: Server, adminOnly: true },
-      { href: "/admin/alerts", label: "Email alerts", icon: Send, adminOnly: true },
     ],
   },
   {
@@ -92,7 +90,6 @@ const PAGE_META: { match: (path: string) => boolean; meta: AdminPageMeta }[] = [
   { match: (p) => p.startsWith("/admin/tasks"), meta: { section: "Overview", title: "Tasks" } },
   { match: (p) => p.startsWith("/admin/analytics"), meta: { section: "Insights", title: "Analytics" } },
   { match: (p) => p.startsWith("/admin/hosting"), meta: { section: "Insights", title: "Hosting" } },
-  { match: (p) => p.startsWith("/admin/alerts"), meta: { section: "Insights", title: "Email alerts" } },
   { match: (p) => p === "/admin/tools/new", meta: { section: "Catalog", title: "New tool" } },
   { match: (p) => p.startsWith("/admin/tools/"), meta: { section: "Catalog", title: "Edit tool" } },
   { match: (p) => p.startsWith("/admin/tools"), meta: { section: "Catalog", title: "Tools" } },
