@@ -20,6 +20,13 @@ export function normalizeDatabaseUrl(url) {
       if (parsed.port === "6543" && !parsed.searchParams.has("pgbouncer")) {
         parsed.searchParams.set("pgbouncer", "true");
       }
+      // Keep each app instance from exhausting Supabase connection limits
+      if (
+        !parsed.searchParams.has("connection_limit") &&
+        (parsed.port === "6543" || parsed.hostname.includes("pooler"))
+      ) {
+        parsed.searchParams.set("connection_limit", "5");
+      }
       return parsed.toString();
     } catch {
       return url.includes("sslmode=") ? url : `${url}${url.includes("?") ? "&" : "?"}sslmode=require`;
