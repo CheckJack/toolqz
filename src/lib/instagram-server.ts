@@ -77,7 +77,7 @@ export async function getInstagramDiagnostics(): Promise<InstagramDiagnostics> {
   return {
     pageAccessToken,
     instagramAccountId,
-    ready: pageAccessToken && instagramAccountId && (tokenHealth?.valid ?? true),
+    ready: pageAccessToken && instagramAccountId,
     hint,
     tokenHealth,
   };
@@ -151,7 +151,7 @@ export async function fetchInstagramReport(range: InstagramRange): Promise<Insta
   const warnings: string[] = [];
   if (diagnostics.tokenHealth?.warning) warnings.push(diagnostics.tokenHealth.warning);
 
-  if (!diagnostics.ready) {
+  if (!diagnostics.pageAccessToken || !diagnostics.instagramAccountId) {
     return {
       configured: false,
       range,

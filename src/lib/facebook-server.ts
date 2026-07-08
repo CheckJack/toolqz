@@ -77,7 +77,7 @@ export async function getFacebookDiagnostics(): Promise<FacebookDiagnostics> {
   return {
     pageAccessToken,
     facebookPageId,
-    ready: pageAccessToken && facebookPageId && (tokenHealth?.valid ?? true),
+    ready: pageAccessToken && facebookPageId,
     hint,
     tokenHealth,
   };
@@ -142,7 +142,7 @@ export async function fetchFacebookReport(range: FacebookRange): Promise<Faceboo
   const warnings: string[] = [];
   if (diagnostics.tokenHealth?.warning) warnings.push(diagnostics.tokenHealth.warning);
 
-  if (!diagnostics.ready) {
+  if (!diagnostics.pageAccessToken || !diagnostics.facebookPageId) {
     return {
       configured: false,
       range,

@@ -159,10 +159,11 @@ export function AdminSocialFacebook({
   if (!data) return null;
 
   if (!data.configured) {
+    const envSet = status?.pageAccessToken && status?.facebookPageId;
     return (
       <SocialNotConfigured
-        title="Facebook not configured"
-        hint={status?.hint}
+        title={envSet ? "Facebook connection issue" : "Facebook not configured"}
+        hint={status?.hint ?? (envSet ? "Check META_PAGE_ACCESS_TOKEN — it may be expired." : null)}
         linkHref={FACEBOOK_URL}
         linkLabel="Open Toolqz on Facebook →"
         envVars={["META_PAGE_ACCESS_TOKEN", "FACEBOOK_PAGE_ID"]}

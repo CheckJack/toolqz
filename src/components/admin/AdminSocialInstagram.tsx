@@ -134,10 +134,11 @@ export function AdminSocialInstagram({
   if (!data) return null;
 
   if (!data.configured) {
+    const envSet = status?.pageAccessToken && status?.instagramAccountId;
     return (
       <SocialNotConfigured
-        title="Instagram not configured"
-        hint={status?.hint}
+        title={envSet ? "Instagram connection issue" : "Instagram not configured"}
+        hint={status?.hint ?? (envSet ? "Check META_PAGE_ACCESS_TOKEN — it may be expired." : null)}
         linkHref={INSTAGRAM_URL}
         linkLabel="Open @toolqz on Instagram →"
         envVars={["META_PAGE_ACCESS_TOKEN", "INSTAGRAM_BUSINESS_ACCOUNT_ID"]}
