@@ -81,11 +81,13 @@ export async function fetchOutboundClickAnalytics(
       orderBy: { _count: { id: "desc" } },
       take: 10,
     }),
-    prisma.affiliateConversion.aggregate({
-      where: conversionFilter,
-      _sum: { amount: true },
-      _count: { id: true },
-    }),
+    prisma.affiliateConversion
+      .aggregate({
+        where: conversionFilter,
+        _sum: { amount: true },
+        _count: { id: true },
+      })
+      .catch(() => ({ _sum: { amount: null }, _count: { id: 0 } })),
     toolSlug
       ? prisma.tool.findUnique({ where: { slug: toolSlug }, select: { id: true } })
       : Promise.resolve(null),

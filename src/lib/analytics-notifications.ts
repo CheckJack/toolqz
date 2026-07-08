@@ -43,32 +43,37 @@ export async function notifyAnalyticsWarnings(
   warnings: string[],
   source: AnalyticsWarningSource
 ): Promise<number> {
-  const unique = [...new Set(warnings.map((w) => w.trim()).filter(Boolean))];
-  if (!unique.length) return 0;
+  try {
+    const unique = [...new Set(warnings.map((w) => w.trim()).filter(Boolean))];
+    if (!unique.length) return 0;
 
-  const since = new Date(Date.now() - DEDUPE_MS);
-  let created = 0;
+    const since = new Date(Date.now() - DEDUPE_MS);
+    let created = 0;
 
-  for (const warning of unique) {
-    const entityId = warningEntityId(source, warning);
-    const existing = await prisma.adminNotification.findFirst({
-      where: {
+    for (const warning of unique) {
+      const entityId = warningEntityId(source, warning);
+      const existing = await prisma.adminNotification.findFirst({
+        where: {
+          type: "analytics_warning",
+          entityId,
+          createdAt: { gte: since },
+        },
+        select: { id: true },
+      });
+      if (existing) continue;
+
+      created += await notifyTeamMembers({
         type: "analytics_warning",
+        title: "Analytics warning",
+        body: warning,
+        href: HREF_BY_SOURCE[source],
         entityId,
-        createdAt: { gte: since },
-      },
-      select: { id: true },
-    });
-    if (existing) continue;
+      });
+    }
 
-    created += await notifyTeamMembers({
-      type: "analytics_warning",
-      title: "Analytics warning",
-      body: warning,
-      href: HREF_BY_SOURCE[source],
-      entityId,
-    });
+    return created;
+  } catch (error) {
+    console.error("[analytics-notifications] Failed to notify:", error);
+    return 0;
   }
-
-  return created;
 }

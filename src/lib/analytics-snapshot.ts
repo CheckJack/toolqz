@@ -37,10 +37,16 @@ export async function saveDailyAnalyticsSnapshot(): Promise<{ date: string; save
 }
 
 export async function getRecentSnapshots(limit = 14) {
-  const rows = await prisma.analyticsSnapshot.findMany({
-    orderBy: { date: "desc" },
-    take: limit,
-  });
+  let rows: { date: string; payload: string }[] = [];
+  try {
+    rows = await prisma.analyticsSnapshot.findMany({
+      orderBy: { date: "desc" },
+      take: limit,
+    });
+  } catch (error) {
+    console.warn("[analytics-snapshot] Could not load snapshots:", error);
+    return [];
+  }
 
   return rows
     .map((row) => {

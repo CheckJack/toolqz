@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+import { handleAuthError } from "@/lib/api-errors";
 import { requireSession } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { syncFollowUpNotificationsForUser } from "@/lib/notifications";
 
 export async function GET(request: NextRequest) {
   try {
     const session = await requireSession();
-    await syncFollowUpNotificationsForUser(session.id);
 
     const { searchParams } = request.nextUrl;
     const pageSize = Math.min(50, Math.max(1, Number(searchParams.get("pageSize") ?? "25")));
@@ -41,8 +40,8 @@ export async function GET(request: NextRequest) {
       pageSize,
       totalPages: Math.max(1, Math.ceil(total / pageSize)),
     });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    return handleAuthError(error, "Failed to load notifications");
   }
 }
 
@@ -68,7 +67,7 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
-  } catch {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  } catch (error) {
+    return handleAuthError(error, "Failed to update notifications");
   }
 }
