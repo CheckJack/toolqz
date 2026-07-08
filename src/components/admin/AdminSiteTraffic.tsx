@@ -8,19 +8,10 @@ import { AdminChartCard } from "@/components/admin/charts/AdminChartCard";
 import { DailyAreaChart } from "@/components/admin/charts/DailyAreaChart";
 import { HorizontalBarChart } from "@/components/admin/charts/HorizontalBarChart";
 import { MultiMetricTrendChart } from "@/components/admin/charts/MultiMetricTrendChart";
+import { applyAnalyticsUrlParams } from "@/lib/analytics-ranges";
+import type { Ga4SiteReport } from "@/lib/ga4-server";
+import { AnalyticsWarnings } from "@/components/admin/AnalyticsShared";
 import { CHART, formatShortDate, toRankChartRows } from "@/lib/admin-charts";
-
-interface SiteTrafficData {
-  configured: boolean;
-  range: string;
-  users: number;
-  sessions: number;
-  pageViews: number;
-  realtimeActiveUsers: number;
-  daily: { date: string; users: number; sessions: number; pageViews: number }[];
-  topPages: { path: string; views: number }[];
-  topSources: { source: string; sessions: number }[];
-}
 
 interface Ga4Status {
   propertyId: boolean;
@@ -42,7 +33,7 @@ type RangeValue = (typeof RANGES)[number]["value"];
 
 const GA4_URL = "https://analytics.google.com/";
 
-export function AdminSiteTraffic() {
+export function AdminSiteTraffic({ initialData = null }: { initialData?: Ga4SiteReport | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialRange = searchParams.get("range");
@@ -51,17 +42,15 @@ export function AdminSiteTraffic() {
       ? (initialRange as RangeValue)
       : "30d"
   );
-  const [data, setData] = useState<SiteTrafficData | null>(null);
+  const [data, setData] = useState<Ga4SiteReport | null>(initialData);
   const [status, setStatus] = useState<Ga4Status | null>(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialData);
 
   function syncRange(value: RangeValue) {
     setRange(value);
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", "traffic");
-    if (value === "30d") params.delete("range");
-    else params.set("range", value);
+    applyAnalyticsUrlParams(params, "traffic", value);
     router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
   }
 
@@ -89,8 +78,13 @@ export function AdminSiteTraffic() {
   }
 
   useEffect(() => {
+    if (initialData && initialData.range === range) {
+      setData(initialData);
+      setLoading(false);
+      return;
+    }
     loadData();
-  }, [range]);
+  }, [range, initialData]);
 
   if (error && !data) {
     const isConfig =
@@ -175,9 +169,20 @@ export function AdminSiteTraffic() {
     data.topSources.map((source) => ({ name: source.source, value: source.sessions })),
     8
   );
+  const devicesChart = toRankChartRows(
+    data.devices.map((device) => ({ name: device.device, value: device.sessions })),
+    5
+  );
+
+  function formatPct(value: number | null): string {
+    if (value == null) return "—";
+    const sign = value > 0 ? "+" : "";
+    return `${sign}${value}% vs prior period`;
+  }
 
   return (
     <div className="space-y-6">
+      <AnalyticsWarnings warnings={data.warnings} />
       <div className="admin-segmented w-fit max-w-full overflow-x-auto">
         {RANGES.map((r) => (
           <button
@@ -197,18 +202,28 @@ export function AdminSiteTraffic() {
         <div className="admin-card admin-card-pad">
           <p className="admin-stat-label">Active users ({rangeLabel.toLowerCase()})</p>
           <p className="admin-stat-value text-neon">{data.users.toLocaleString()}</p>
-        </div>
-        <div className="admin-card admin-card-pad">
-          <p className="admin-stat-label">Sessions</p>
-          <p className="admin-stat-value">{data.sessions.toLocaleString()}</p>
+          <p className="mt-1 text-xs text-muted">{formatPct(data.usersChangePct)}</p>
         </div>
         <div className="admin-card admin-card-pad">
           <p className="admin-stat-label">Page views</p>
           <p className="admin-stat-value">{data.pageViews.toLocaleString()}</p>
+          <p className="mt-1 text-xs text-muted">{formatPct(data.pageViewsChangePct)}</p>
+        </div>
+        <div className="admin-card admin-card-pad">
+          <p className="admin-stat-label">Engagement rate</p>
+          <p className="admin-stat-value">{(data.engagementRate * 100).toFixed(1)}%</p>
+          <p className="mt-1 text-xs text-muted">
+            Bounce {(data.bounceRate * 100).toFixed(1)}%
+          </p>
         </div>
         <div className="admin-card admin-card-pad border-neon/20 bg-neon/5">
-          <p className="admin-stat-label">Active now</p>
-          <p className="admin-stat-value text-neon">{data.realtimeActiveUsers}</p>
+          <p className="admin-stat-label">Blog views · Active now</p>
+          <p className="admin-stat-value text-neon">
+            {data.blogPageViews.toLocaleString()} · {data.realtimeActiveUsers}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Avg session {Math.round(data.avgSessionDuration)}s
+          </p>
         </div>
       </div>
 
@@ -256,6 +271,12 @@ export function AdminSiteTraffic() {
           />
         </AdminChartCard>
       </div>
+
+      {devicesChart.length > 0 && (
+        <AdminChartCard title="Sessions by device">
+          <HorizontalBarChart data={devicesChart} valueLabel="Sessions" height={220} />
+        </AdminChartCard>
+      )}
 
       <p className="text-xs text-muted">
         Data reflects visitors who accepted analytics cookies. Admin pages are excluded from the

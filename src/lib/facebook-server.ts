@@ -1,10 +1,12 @@
 import {
   formatInsightDate,
+  getMetaTokenHealth,
   metaGraphGet,
   MetaGraphError,
   type SocialRange,
   socialRangeToSinceUntil,
 } from "@/lib/meta-graph";
+import { socialRangeStartDate } from "@/lib/analytics-ranges";
 
 export type FacebookRange = SocialRange;
 
@@ -29,7 +31,10 @@ export interface FacebookReport {
   totalEngagement: number;
   dailyImpressions: { date: string; value: number }[];
   dailyReach: { date: string; value: number }[];
+  dailyEngagement: { date: string; value: number }[];
   posts: FacebookPostItem[];
+  warnings: string[];
+  tokenHealth: Awaited<ReturnType<typeof getMetaTokenHealth>> | null;
 }
 
 export interface FacebookDiagnostics {
@@ -37,6 +42,7 @@ export interface FacebookDiagnostics {
   facebookPageId: boolean;
   ready: boolean;
   hint: string | null;
+  tokenHealth?: Awaited<ReturnType<typeof getMetaTokenHealth>>;
 }
 
 export class FacebookConfigError extends MetaGraphError {
@@ -51,9 +57,10 @@ function getFacebookPageId(): string | null {
   return id || null;
 }
 
-export function getFacebookDiagnostics(): FacebookDiagnostics {
+export async function getFacebookDiagnostics(): Promise<FacebookDiagnostics> {
   const pageAccessToken = Boolean(process.env.META_PAGE_ACCESS_TOKEN?.trim());
   const facebookPageId = Boolean(getFacebookPageId());
+  const tokenHealth = pageAccessToken ? await getMetaTokenHealth() : undefined;
 
   let hint: string | null = null;
   if (!pageAccessToken && !facebookPageId) {
@@ -63,13 +70,16 @@ export function getFacebookDiagnostics(): FacebookDiagnostics {
     hint = "Set META_PAGE_ACCESS_TOKEN (Page access token from Graph API Explorer).";
   } else if (!facebookPageId) {
     hint = "Set FACEBOOK_PAGE_ID (Facebook Page ID from Graph API Explorer).";
+  } else if (tokenHealth && !tokenHealth.valid) {
+    hint = tokenHealth.warning;
   }
 
   return {
     pageAccessToken,
     facebookPageId,
-    ready: pageAccessToken && facebookPageId,
+    ready: pageAccessToken && facebookPageId && (tokenHealth?.valid ?? true),
     hint,
+    tokenHealth,
   };
 }
 
@@ -128,7 +138,10 @@ function sumSeries(series: { value: number }[]): number {
 }
 
 export async function fetchFacebookReport(range: FacebookRange): Promise<FacebookReport> {
-  const diagnostics = getFacebookDiagnostics();
+  const diagnostics = await getFacebookDiagnostics();
+  const warnings: string[] = [];
+  if (diagnostics.tokenHealth?.warning) warnings.push(diagnostics.tokenHealth.warning);
+
   if (!diagnostics.ready) {
     return {
       configured: false,
@@ -140,44 +153,68 @@ export async function fetchFacebookReport(range: FacebookRange): Promise<Faceboo
       totalEngagement: 0,
       dailyImpressions: [],
       dailyReach: [],
+      dailyEngagement: [],
       posts: [],
+      warnings,
+      tokenHealth: diagnostics.tokenHealth ?? null,
     };
   }
 
   const pageId = getFacebookPageId()!;
   const { since, until } = socialRangeToSinceUntil(range);
+  const rangeStart = socialRangeStartDate(range);
 
-  const [page, insightsRes, postsRes] = await Promise.all([
-    metaGraphGet<PageFields>(pageId, {
-      fields: "name,followers_count,fan_count",
-    }),
-    metaGraphGet<InsightsResponse>(`${pageId}/insights`, {
+  let insightsRes: InsightsResponse = { data: [] };
+  let postsRes: PostsResponse = { data: [] };
+
+  try {
+    insightsRes = await metaGraphGet<InsightsResponse>(`${pageId}/insights`, {
       metric: "page_impressions,page_impressions_unique,page_post_engagements",
       period: "day",
       since: String(since),
       until: String(until),
-    }).catch(() => ({ data: [] as InsightNode[] })),
-    metaGraphGet<PostsResponse>(`${pageId}/posts`, {
+    });
+  } catch (error) {
+    warnings.push(
+      error instanceof Error ? `Facebook insights: ${error.message}` : "Facebook insights unavailable."
+    );
+  }
+
+  try {
+    postsRes = await metaGraphGet<PostsResponse>(`${pageId}/posts`, {
       fields:
         "id,message,created_time,permalink_url,full_picture,shares,likes.summary(true),comments.summary(true)",
       limit: "25",
-    }).catch(() => ({ data: [] as PostNode[] })),
-  ]);
+    });
+  } catch (error) {
+    warnings.push(
+      error instanceof Error ? `Facebook posts: ${error.message}` : "Facebook posts unavailable."
+    );
+  }
+
+  const page = await metaGraphGet<PageFields>(pageId, {
+    fields: "name,followers_count,fan_count",
+  });
 
   const dailyImpressions = insightSeries(insightsRes.data, "page_impressions");
   const dailyReach = insightSeries(insightsRes.data, "page_impressions_unique");
   const dailyEngagement = insightSeries(insightsRes.data, "page_post_engagements");
 
-  const posts = (postsRes.data ?? []).map((item) => ({
-    id: item.id,
-    message: item.message ?? "",
-    permalink: item.permalink_url ?? "",
-    timestamp: item.created_time ?? "",
-    likeCount: item.likes?.summary?.total_count ?? 0,
-    commentsCount: item.comments?.summary?.total_count ?? 0,
-    shareCount: item.shares?.count ?? 0,
-    thumbnailUrl: item.full_picture ?? null,
-  }));
+  const posts = (postsRes.data ?? [])
+    .filter((item) => {
+      if (!item.created_time) return true;
+      return new Date(item.created_time) >= rangeStart;
+    })
+    .map((item) => ({
+      id: item.id,
+      message: item.message ?? "",
+      permalink: item.permalink_url ?? "",
+      timestamp: item.created_time ?? "",
+      likeCount: item.likes?.summary?.total_count ?? 0,
+      commentsCount: item.comments?.summary?.total_count ?? 0,
+      shareCount: item.shares?.count ?? 0,
+      thumbnailUrl: item.full_picture ?? null,
+    }));
 
   return {
     configured: true,
@@ -189,6 +226,9 @@ export async function fetchFacebookReport(range: FacebookRange): Promise<Faceboo
     totalEngagement: sumSeries(dailyEngagement),
     dailyImpressions,
     dailyReach,
+    dailyEngagement,
     posts,
+    warnings,
+    tokenHealth: diagnostics.tokenHealth ?? null,
   };
 }

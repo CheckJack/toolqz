@@ -12,6 +12,9 @@ import { DonutBreakdownChart } from "@/components/admin/charts/DonutBreakdownCha
 import { HorizontalBarChart } from "@/components/admin/charts/HorizontalBarChart";
 import { useToast } from "@/components/admin/Toast";
 import { CHART, toDailyChartRows, toRankChartRows } from "@/lib/admin-charts";
+import type { OutboundClickAnalytics } from "@/lib/analytics-clicks";
+import type { ToolCtrRow } from "@/lib/analytics-tool-ctr";
+import { applyAnalyticsUrlParams, parseClickRange } from "@/lib/analytics-ranges";
 
 interface ToolRow {
   toolId: string;
@@ -22,20 +25,7 @@ interface ToolRow {
   published: boolean;
 }
 
-interface Analytics {
-  totalClicks: number;
-  todayClicks: number;
-  weekClicks: number;
-  monthClicks: number;
-  rangeClicks: number;
-  range: string;
-  allTools: ToolRow[];
-  dailyClicks: { date: string; count: number }[];
-  toolDailyClicks?: { date: string; count: number }[];
-  referrers: { referrer: string; count: number }[];
-  affiliateClicks: number;
-  nonAffiliateClicks: number;
-}
+type Analytics = OutboundClickAnalytics;
 
 const RANGES = [
   { value: "7d", label: "7 days" },
@@ -47,30 +37,33 @@ const RANGES = [
 type RangeValue = (typeof RANGES)[number]["value"];
 type ToolView = "all" | "with" | "zero";
 
-export function AdminAnalytics() {
+export function AdminAnalytics({
+  initialData = null,
+  toolCtrInitial = null,
+}: {
+  initialData?: Analytics | null;
+  toolCtrInitial?: { configured: boolean; rows: ToolCtrRow[]; warning: string | null } | null;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
-  const [data, setData] = useState<Analytics | null>(null);
+  const [data, setData] = useState<Analytics | null>(initialData);
   const initialRange = searchParams.get("range");
   const toolFilter = searchParams.get("tool") ?? "";
-  const [range, setRange] = useState<RangeValue>(
-    initialRange && RANGES.some((r) => r.value === initialRange)
-      ? (initialRange as RangeValue)
-      : "30d"
-  );
+  const [range, setRange] = useState<RangeValue>(parseClickRange(initialRange) as RangeValue);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialData);
   const [sortBy, setSortBy] = useState<"clicks" | "name">("clicks");
   const [toolView, setToolView] = useState<ToolView>("all");
   const [searchInput, setSearchInput] = useState("");
+  const [importCsv, setImportCsv] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [toolCtr, setToolCtr] = useState(toolCtrInitial);
 
   function syncRange(value: RangeValue) {
     setRange(value);
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", "clicks");
-    if (value === "30d") params.delete("range");
-    else params.set("range", value);
+    applyAnalyticsUrlParams(params, "clicks", value);
     router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
   }
 
@@ -79,19 +72,53 @@ export function AdminAnalytics() {
     setError("");
     const params = new URLSearchParams({ range });
     if (toolFilter) params.set("tool", toolFilter);
-    fetch(`/api/admin/analytics?${params}`)
-      .then((r) => {
+    Promise.all([
+      fetch(`/api/admin/analytics?${params}`).then(async (r) => {
         if (!r.ok) throw new Error("Failed");
         return r.json();
+      }),
+      fetch(`/api/admin/analytics/tool-ctr?trafficRange=${range}&clickRange=${range}`).then((r) =>
+        r.ok ? r.json() : null
+      ),
+    ])
+      .then(([analytics, ctr]) => {
+        setData(analytics);
+        if (ctr) setToolCtr(ctr);
       })
-      .then(setData)
       .catch(() => setError("Failed to load analytics"))
       .finally(() => setLoading(false));
   }
 
   useEffect(() => {
+    if (initialData && initialData.range === range && toolCtrInitial) {
+      setData(initialData);
+      setToolCtr(toolCtrInitial);
+      setLoading(false);
+      return;
+    }
     loadAnalytics();
-  }, [range, toolFilter]);
+  }, [range, toolFilter, initialData, toolCtrInitial]);
+
+  async function importConversions() {
+    if (!importCsv.trim()) return;
+    setImporting(true);
+    try {
+      const res = await fetch("/api/admin/analytics/conversions/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ csv: importCsv }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error ?? "Import failed");
+      toast(`Imported ${body.imported} conversion rows`);
+      setImportCsv("");
+      loadAnalytics();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Import failed", "error");
+    } finally {
+      setImporting(false);
+    }
+  }
 
   function clearToolFilter() {
     const params = new URLSearchParams(searchParams.toString());
@@ -278,6 +305,74 @@ export function AdminAnalytics() {
             <p className="admin-stat-value text-neon">{stat.value.toLocaleString()}</p>
           </div>
         ))}
+      </div>
+
+      {(data.conversionCount > 0 || data.conversionRevenue > 0) && (
+        <div className="admin-card admin-card-pad">
+          <p className="admin-stat-label">Imported affiliate revenue ({rangeLabel.toLowerCase()})</p>
+          <p className="admin-stat-value text-neon">
+            ${data.conversionRevenue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </p>
+          <p className="mt-1 text-xs text-muted">{data.conversionCount} conversion rows imported</p>
+        </div>
+      )}
+
+      {toolCtr?.configured && toolCtr.rows.length > 0 && (
+        <AdminChartCard
+          title="Tool click-through rate"
+          description="Outbound Visit clicks ÷ GA4 tool page views in the same range"
+        >
+          {toolCtr.warning && <p className="mb-3 text-sm text-amber-300">{toolCtr.warning}</p>}
+          <div className="overflow-x-auto">
+            <table className="admin-table min-w-[640px]">
+              <thead>
+                <tr>
+                  <th>Tool</th>
+                  <th className="text-right">Page views</th>
+                  <th className="text-right">Clicks</th>
+                  <th className="text-right">CTR</th>
+                </tr>
+              </thead>
+              <tbody>
+                {toolCtr.rows.slice(0, 15).map((row) => (
+                  <tr key={row.slug}>
+                    <td>
+                      <p className="font-medium text-white">{row.name}</p>
+                      <p className="font-mono text-[11px] text-muted-dim">/{row.slug}</p>
+                    </td>
+                    <td className="text-right tabular-nums">{row.pageViews.toLocaleString()}</td>
+                    <td className="text-right tabular-nums text-neon">
+                      {row.clicks.toLocaleString()}
+                    </td>
+                    <td className="text-right tabular-nums">{row.ctr.toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </AdminChartCard>
+      )}
+
+      <div className="admin-card admin-card-pad space-y-3">
+        <h2 className="admin-section-title">Import affiliate conversions (CSV)</h2>
+        <p className="text-sm text-muted">
+          Header: <code className="text-white">date,amount,tool_slug,network,notes</code>
+        </p>
+        <textarea
+          value={importCsv}
+          onChange={(e) => setImportCsv(e.target.value)}
+          rows={4}
+          placeholder={"date,amount,tool_slug,network,notes\n2026-07-01,42.50,notion,Impact,"}
+          className="w-full rounded-lg border border-dark-border bg-dark px-3 py-2 text-sm text-white"
+        />
+        <button
+          type="button"
+          onClick={importConversions}
+          disabled={importing || !importCsv.trim()}
+          className="admin-toolbar-btn"
+        >
+          {importing ? "Importing…" : "Import CSV"}
+        </button>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

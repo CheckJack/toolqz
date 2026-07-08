@@ -4,26 +4,23 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { AdminChartCard } from "@/components/admin/charts/AdminChartCard";
-import { DailyAreaChart } from "@/components/admin/charts/DailyAreaChart";
 import { MultiMetricTrendChart } from "@/components/admin/charts/MultiMetricTrendChart";
 import { CHART, formatShortDate } from "@/lib/admin-charts";
+import {
+  AnalyticsWarnings,
+  exportCsv,
+  SocialRangePicker,
+  type SocialRangeValue,
+} from "@/components/admin/AnalyticsShared";
+import { applyAnalyticsUrlParams } from "@/lib/analytics-ranges";
 import type { FacebookDiagnostics, FacebookReport } from "@/lib/facebook-server";
 import {
   MetaTokenNote,
   PostsList,
   SocialErrorState,
   SocialNotConfigured,
-  SocialRangePicker,
   StatCard,
 } from "@/components/admin/AdminSocialInstagram";
-
-const RANGES = [
-  { value: "7d", label: "7 days" },
-  { value: "30d", label: "30 days" },
-  { value: "90d", label: "90 days" },
-] as const;
-
-type RangeValue = (typeof RANGES)[number]["value"];
 
 const FACEBOOK_URL = "https://www.facebook.com/toolqz";
 
@@ -41,15 +38,21 @@ function formatPostDate(iso: string): string {
 
 function mergeDailyTrend(
   impressions: { date: string; value: number }[],
-  reach: { date: string; value: number }[]
+  reach: { date: string; value: number }[],
+  engagement: { date: string; value: number }[]
 ) {
-  const dates = new Set([...impressions.map((d) => d.date), ...reach.map((d) => d.date)]);
+  const dates = new Set([
+    ...impressions.map((d) => d.date),
+    ...reach.map((d) => d.date),
+    ...engagement.map((d) => d.date),
+  ]);
   return [...dates]
     .sort()
     .map((date) => ({
       label: formatShortDate(date),
       impressions: impressions.find((d) => d.date === date)?.value ?? 0,
       reach: reach.find((d) => d.date === date)?.value ?? 0,
+      engagement: engagement.find((d) => d.date === date)?.value ?? 0,
     }));
 }
 
@@ -63,22 +66,22 @@ export function AdminSocialFacebook({
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialRange = searchParams.get("range");
-  const [range, setRange] = useState<RangeValue>(
-    initialRange && RANGES.some((r) => r.value === initialRange)
-      ? (initialRange as RangeValue)
-      : "30d"
+  const [range, setRange] = useState<SocialRangeValue>(
+    initialRange === "7d" || initialRange === "90d"
+      ? initialRange
+      : initialRange === "all"
+        ? "90d"
+        : "30d"
   );
   const [data, setData] = useState<FacebookReport | null>(initialData);
   const [status, setStatus] = useState<FacebookDiagnostics | null>(initialStatus);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(!initialData);
 
-  function syncRange(value: RangeValue) {
+  function syncRange(value: SocialRangeValue) {
     setRange(value);
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", "facebook");
-    if (value === "30d") params.delete("range");
-    else params.set("range", value);
+    applyAnalyticsUrlParams(params, "facebook", value);
     router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
   }
 
@@ -167,16 +170,40 @@ export function AdminSocialFacebook({
     );
   }
 
-  const rangeLabel = RANGES.find((r) => r.value === range)?.label ?? "In range";
-  const trend = mergeDailyTrend(data.dailyImpressions, data.dailyReach);
-  const impressionsTrend = data.dailyImpressions.map((day) => ({
-    label: formatShortDate(day.date),
-    value: day.value,
-  }));
+  const rangeLabel =
+    range === "7d" ? "7 days" : range === "90d" ? "90 days" : "30 days";
+  const report = data;
+  const trend = mergeDailyTrend(
+    report.dailyImpressions,
+    report.dailyReach,
+    report.dailyEngagement
+  );
+
+  function exportPostsCsv() {
+    const header = "Date,Message,Likes,Comments,Shares,URL\n";
+    const rows = report.posts.map((post) =>
+      [
+        formatPostDate(post.timestamp),
+        `"${post.message.replace(/"/g, '""')}"`,
+        post.likeCount,
+        post.commentsCount,
+        post.shareCount,
+        post.permalink,
+      ].join(",")
+    );
+    exportCsv(`toolqz-facebook-${range}.csv`, header, rows);
+  }
 
   return (
     <div className="space-y-6">
-      <SocialRangePicker range={range} onChange={syncRange} />
+      <AnalyticsWarnings warnings={report.warnings} />
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SocialRangePicker range={range} onChange={syncRange} />
+        <button type="button" onClick={exportPostsCsv} className="admin-toolbar-btn">
+          Export CSV
+        </button>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Followers" value={data.followersCount} accent />
@@ -192,27 +219,18 @@ export function AdminSocialFacebook({
       )}
 
       <AdminChartCard
-        title="Impressions & reach over time"
-        description="Daily page impressions and unique reach from Facebook Page Insights"
+        title="Impressions, reach & engagement"
+        description="Daily Facebook Page Insights"
       >
         <MultiMetricTrendChart
           data={trend}
           series={[
             { key: "impressions", label: "Impressions", color: CHART.primary },
             { key: "reach", label: "Reach", color: CHART.purple },
+            { key: "engagement", label: "Engagement", color: CHART.success },
           ]}
           height={280}
           emptyMessage="No Facebook insights for this period yet."
-        />
-      </AdminChartCard>
-
-      <AdminChartCard title="Impressions trend" description="Daily page impressions">
-        <DailyAreaChart
-          data={impressionsTrend}
-          valueLabel="Impressions"
-          color={CHART.primary}
-          height={240}
-          emptyMessage="No impression data for this period yet."
         />
       </AdminChartCard>
 

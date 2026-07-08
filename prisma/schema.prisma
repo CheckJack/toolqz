@@ -386,3 +386,26 @@ model SystemMonitorState {
   value     String
   updatedAt DateTime @updatedAt
 }
+
+model AnalyticsSnapshot {
+  id        String   @id @default(cuid())
+  date      String   @unique
+  payload   String
+  createdAt DateTime @default(now())
+
+  @@index([date])
+}
+
+model AffiliateConversion {
+  id        String   @id @default(cuid())
+  date      DateTime
+  toolSlug  String?
+  amount    Float
+  currency  String   @default("USD")
+  network   String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([date])
+  @@index([toolSlug])
+}

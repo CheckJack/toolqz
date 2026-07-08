@@ -9,14 +9,13 @@ import { AdminChartCard } from "@/components/admin/charts/AdminChartCard";
 import { DailyAreaChart } from "@/components/admin/charts/DailyAreaChart";
 import { CHART, formatShortDate } from "@/lib/admin-charts";
 import type { InstagramDiagnostics, InstagramReport } from "@/lib/instagram-server";
-
-const RANGES = [
-  { value: "7d", label: "7 days" },
-  { value: "30d", label: "30 days" },
-  { value: "90d", label: "90 days" },
-] as const;
-
-type RangeValue = (typeof RANGES)[number]["value"];
+import {
+  AnalyticsWarnings,
+  exportCsv,
+  SocialRangePicker,
+  type SocialRangeValue,
+} from "@/components/admin/AnalyticsShared";
+import { applyAnalyticsUrlParams } from "@/lib/analytics-ranges";
 
 const INSTAGRAM_URL = "https://www.instagram.com/toolqz";
 
@@ -42,22 +41,22 @@ export function AdminSocialInstagram({
   const router = useRouter();
   const searchParams = useSearchParams();
   const initialRange = searchParams.get("range");
-  const [range, setRange] = useState<RangeValue>(
-    initialRange && RANGES.some((r) => r.value === initialRange)
-      ? (initialRange as RangeValue)
-      : "30d"
+  const [range, setRange] = useState<SocialRangeValue>(
+    initialRange === "7d" || initialRange === "90d"
+      ? initialRange
+      : initialRange === "all"
+        ? "90d"
+        : "30d"
   );
   const [data, setData] = useState<InstagramReport | null>(initialData);
   const [status, setStatus] = useState<InstagramDiagnostics | null>(initialStatus);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(!initialData);
 
-  function syncRange(value: RangeValue) {
+  function syncRange(value: SocialRangeValue) {
     setRange(value);
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", "instagram");
-    if (value === "30d") params.delete("range");
-    else params.set("range", value);
+    applyAnalyticsUrlParams(params, "instagram", value);
     router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
   }
 
@@ -146,15 +145,41 @@ export function AdminSocialInstagram({
     );
   }
 
-  const rangeLabel = RANGES.find((r) => r.value === range)?.label ?? "In range";
-  const reachTrend = data.dailyReach.map((day) => ({
+  const report = data;
+  const rangeLabel =
+    range === "7d" ? "7 days" : range === "90d" ? "90 days" : "30 days";
+  const reachTrend = report.dailyReach.map((day) => ({
     label: formatShortDate(day.date),
     value: day.value,
   }));
 
+  function exportPostsCsv() {
+    const header = "Date,Type,Caption,Likes,Comments,Reach,Engagement,URL\n";
+    const rows = report.media.map((post) =>
+      [
+        formatPostDate(post.timestamp),
+        post.mediaType,
+        `"${post.caption.replace(/"/g, '""')}"`,
+        post.likeCount,
+        post.commentsCount,
+        post.reach ?? "",
+        post.engagement ?? "",
+        post.permalink,
+      ].join(",")
+    );
+    exportCsv(`toolqz-instagram-${range}.csv`, header, rows);
+  }
+
   return (
     <div className="space-y-6">
-      <SocialRangePicker range={range} onChange={syncRange} />
+      <AnalyticsWarnings warnings={report.warnings} />
+
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <SocialRangePicker range={range} onChange={syncRange} />
+        <button type="button" onClick={exportPostsCsv} className="admin-toolbar-btn">
+          Export CSV
+        </button>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Followers" value={data.followersCount} accent />
@@ -190,7 +215,13 @@ export function AdminSocialInstagram({
           id: post.id,
           text: truncateText(post.caption) || "No caption",
           date: formatPostDate(post.timestamp),
-          meta: [post.mediaType, `${post.likeCount} likes`, `${post.commentsCount} comments`],
+          meta: [
+            post.mediaType,
+            `${post.likeCount} likes`,
+            `${post.commentsCount} comments`,
+            post.reach != null ? `${post.reach} reach` : "reach n/a",
+            post.engagement != null ? `${post.engagement} eng.` : "",
+          ].filter(Boolean),
           thumbnailUrl: post.thumbnailUrl,
           fallbackLabel: post.mediaType.slice(0, 4),
           permalink: post.permalink,
@@ -198,31 +229,6 @@ export function AdminSocialInstagram({
       />
 
       <MetaTokenNote />
-    </div>
-  );
-}
-
-function SocialRangePicker({
-  range,
-  onChange,
-}: {
-  range: RangeValue;
-  onChange: (value: RangeValue) => void;
-}) {
-  return (
-    <div className="admin-segmented w-fit max-w-full overflow-x-auto">
-      {RANGES.map((r) => (
-        <button
-          key={r.value}
-          type="button"
-          onClick={() => onChange(r.value)}
-          className={`admin-segmented-btn whitespace-nowrap ${
-            range === r.value ? "admin-segmented-btn-active" : ""
-          }`}
-        >
-          {r.label}
-        </button>
-      ))}
     </div>
   );
 }
@@ -417,4 +423,4 @@ function MetaTokenNote() {
   );
 }
 
-export { SocialRangePicker, StatCard, SocialNotConfigured, SocialErrorState, PostsList, MetaTokenNote };
+export { StatCard, SocialNotConfigured, SocialErrorState, PostsList, MetaTokenNote };

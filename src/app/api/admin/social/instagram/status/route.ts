@@ -6,7 +6,7 @@ import { getInstagramDiagnostics } from "@/lib/instagram-server";
 export async function GET() {
   try {
     await requireSession();
-    return NextResponse.json(getInstagramDiagnostics());
+    return NextResponse.json(await getInstagramDiagnostics());
   } catch (error) {
     return handleAuthError(error, "Failed to check Instagram config");
   }

@@ -1,4 +1,8 @@
 import { queryDailyClicks } from "@/lib/analytics-queries";
+import { fetchNewsletterTrend } from "@/lib/analytics-newsletter";
+import { fetchGa4OverviewLite } from "@/lib/ga4-server";
+import { getInstagramDiagnostics, fetchInstagramReport } from "@/lib/instagram-server";
+import { getFacebookDiagnostics, fetchFacebookReport } from "@/lib/facebook-server";
 import { prisma } from "@/lib/db";
 import { partnerMissingAffiliateWhere } from "./catalog-filters";
 
@@ -39,6 +43,8 @@ export async function getAgentAnalyticsSummary(
   const rangeStart = getRangeStart(range);
   const rangeFilter = rangeStart ? { clickedAt: { gte: rangeStart } } : {};
 
+  const socialRange = range === "7d" || range === "90d" ? range : range === "all" ? "90d" : "30d";
+
   const [
     totalClicks,
     todayClicks,
@@ -52,6 +58,10 @@ export async function getAgentAnalyticsSummary(
     affiliateCounts,
     toolsMissingAffiliate,
     programsNoTool,
+    ga4Lite,
+    newsletter,
+    igDiag,
+    fbDiag,
   ] = await Promise.all([
     prisma.click.count(),
     prisma.click.count({ where: { clickedAt: { gte: startOfToday } } }),
@@ -81,7 +91,36 @@ export async function getAgentAnalyticsSummary(
     prisma.affiliateProgram.groupBy({ by: ["status"], _count: { id: true } }),
     prisma.tool.count({ where: partnerMissingAffiliateWhere }),
     prisma.affiliateProgram.count({ where: { toolId: null } }),
+    fetchGa4OverviewLite(socialRange as "7d" | "30d" | "90d"),
+    fetchNewsletterTrend(socialRange as "7d" | "30d" | "90d"),
+    getInstagramDiagnostics(),
+    getFacebookDiagnostics(),
   ]);
+
+  let instagramSummary: { followers: number; reach: number } | null = null;
+  let facebookSummary: { followers: number; reach: number } | null = null;
+
+  if (igDiag.ready) {
+    try {
+      const ig = await fetchInstagramReport(socialRange as "7d" | "30d" | "90d");
+      if (ig.configured) {
+        instagramSummary = { followers: ig.followersCount, reach: ig.totalReach };
+      }
+    } catch {
+      /* optional */
+    }
+  }
+
+  if (fbDiag.ready) {
+    try {
+      const fb = await fetchFacebookReport(socialRange as "7d" | "30d" | "90d");
+      if (fb.configured) {
+        facebookSummary = { followers: fb.followersCount, reach: fb.totalReach };
+      }
+    } catch {
+      /* optional */
+    }
+  }
 
   const toolsWithClicks = allTools
     .map((t) => ({
@@ -133,5 +172,13 @@ export async function getAgentAnalyticsSummary(
     toolsMissingAffiliate,
     programsNoTool,
     zeroClickTools: toolsWithClicks.filter((t) => t.clicks === 0).length,
+    siteTraffic: ga4Lite,
+    newsletter: {
+      totalActive: newsletter.totalActive,
+      newInRange: newsletter.newInRange,
+    },
+    instagram: instagramSummary,
+    facebook: facebookSummary,
+    analyticsUrl: "/admin/analytics",
   };
 }

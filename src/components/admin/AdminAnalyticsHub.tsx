@@ -3,14 +3,21 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
+import { AdminAnalyticsOverview } from "@/components/admin/AdminAnalyticsOverview";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
 import { AdminSiteTraffic } from "@/components/admin/AdminSiteTraffic";
 import { AdminSocialFacebook } from "@/components/admin/AdminSocialFacebook";
 import { AdminSocialInstagram } from "@/components/admin/AdminSocialInstagram";
+import { applyAnalyticsUrlParams, type AnalyticsTab } from "@/lib/analytics-ranges";
+import type { AnalyticsOverviewReport } from "@/lib/analytics-overview";
+import type { OutboundClickAnalytics } from "@/lib/analytics-clicks";
 import type { FacebookDiagnostics, FacebookReport } from "@/lib/facebook-server";
+import type { Ga4SiteReport } from "@/lib/ga4-server";
 import type { InstagramDiagnostics, InstagramReport } from "@/lib/instagram-server";
+import type { ToolCtrRow } from "@/lib/analytics-tool-ctr";
 
 const TABS = [
+  { id: "overview", label: "Overview" },
   { id: "traffic", label: "Site traffic" },
   { id: "instagram", label: "Instagram" },
   { id: "facebook", label: "Facebook" },
@@ -24,22 +31,31 @@ const INSTAGRAM_URL = "https://www.instagram.com/toolqz";
 const FACEBOOK_URL = "https://www.facebook.com/toolqz";
 
 function parseTab(tabParam: string | null): TabId {
+  if (tabParam === "traffic") return "traffic";
   if (tabParam === "clicks") return "clicks";
   if (tabParam === "instagram") return "instagram";
   if (tabParam === "facebook") return "facebook";
-  return "traffic";
+  return "overview";
 }
 
 export function AdminAnalyticsHub({
+  overviewInitial = null,
+  trafficInitial = null,
   instagramInitial = null,
   instagramStatus = null,
   facebookInitial = null,
   facebookStatus = null,
+  clicksInitial = null,
+  toolCtrInitial = null,
 }: {
+  overviewInitial?: AnalyticsOverviewReport | null;
+  trafficInitial?: Ga4SiteReport | null;
   instagramInitial?: InstagramReport | null;
   instagramStatus?: InstagramDiagnostics | null;
   facebookInitial?: FacebookReport | null;
   facebookStatus?: FacebookDiagnostics | null;
+  clicksInitial?: OutboundClickAnalytics | null;
+  toolCtrInitial?: { configured: boolean; rows: ToolCtrRow[]; warning: string | null } | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -47,28 +63,24 @@ export function AdminAnalyticsHub({
 
   function setTab(tab: TabId) {
     const params = new URLSearchParams(searchParams.toString());
-    if (tab === "traffic") params.delete("tab");
-    else params.set("tab", tab);
+    applyAnalyticsUrlParams(params, tab as AnalyticsTab, params.get("range") ?? undefined);
     router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
   }
 
   const description =
-    activeTab === "traffic"
-      ? "Visitors and page views from Google Analytics 4"
-      : activeTab === "instagram"
-        ? "Posts, followers, and reach from @toolqz on Instagram"
-        : activeTab === "facebook"
-          ? "Page insights and posts from Toolqz on Facebook"
-          : "Outbound Visit link clicks across your tools";
+    activeTab === "overview"
+      ? "Cross-channel snapshot — site, social, clicks, and newsletter"
+      : activeTab === "traffic"
+        ? "Visitors and page views from Google Analytics 4"
+        : activeTab === "instagram"
+          ? "Posts, followers, and reach from @toolqz on Instagram"
+          : activeTab === "facebook"
+            ? "Page insights and posts from Toolqz on Facebook"
+            : "Outbound Visit link clicks, CTR, and affiliate conversions";
 
   const headerAction =
     activeTab === "traffic" ? (
-      <Link
-        href={GA4_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="admin-toolbar-btn"
-      >
+      <Link href={GA4_URL} target="_blank" rel="noopener noreferrer" className="admin-toolbar-btn">
         Open GA4
       </Link>
     ) : activeTab === "instagram" ? (
@@ -93,12 +105,7 @@ export function AdminAnalyticsHub({
 
   return (
     <div className="space-y-6">
-      <AdminPageHeader
-        hideTitle
-        title="Analytics"
-        description={description}
-        action={headerAction}
-      />
+      <AdminPageHeader hideTitle title="Analytics" description={description} action={headerAction} />
 
       <div className="admin-segmented w-fit max-w-full overflow-x-auto">
         {TABS.map((tab) => (
@@ -115,8 +122,13 @@ export function AdminAnalyticsHub({
         ))}
       </div>
 
-      {activeTab === "traffic" ? (
-        <AdminSiteTraffic />
+      {activeTab === "overview" ? (
+        <AdminAnalyticsOverview initialData={overviewInitial} />
+      ) : activeTab === "traffic" ? (
+        <AdminSiteTraffic
+          key={`traffic-${searchParams.get("range") ?? "30d"}`}
+          initialData={trafficInitial}
+        />
       ) : activeTab === "instagram" ? (
         <AdminSocialInstagram
           key={`instagram-${searchParams.get("range") ?? "30d"}`}
@@ -130,7 +142,11 @@ export function AdminAnalyticsHub({
           initialStatus={facebookStatus}
         />
       ) : (
-        <AdminAnalytics />
+        <AdminAnalytics
+          key={`clicks-${searchParams.get("range") ?? "30d"}`}
+          initialData={clicksInitial}
+          toolCtrInitial={toolCtrInitial}
+        />
       )}
     </div>
   );

@@ -58,5 +58,86 @@ export async function metaGraphGet<T>(
 
 export function parseSocialRange(raw: string | undefined): SocialRange {
   if (raw === "7d" || raw === "90d") return raw;
+  if (raw === "all") return "90d";
   return "30d";
+}
+
+export interface MetaTokenHealth {
+  valid: boolean;
+  expiresAt: string | null;
+  daysUntilExpiry: number | null;
+  scopes: string[];
+  warning: string | null;
+}
+
+interface DebugTokenResponse {
+  data?: {
+    is_valid?: boolean;
+    expires_at?: number;
+    scopes?: string[];
+    error?: { message?: string };
+  };
+}
+
+/** Verify Page token via Meta debug_token (uses same token as input). */
+export async function getMetaTokenHealth(): Promise<MetaTokenHealth> {
+  const token = getMetaPageAccessToken();
+  if (!token) {
+    return {
+      valid: false,
+      expiresAt: null,
+      daysUntilExpiry: null,
+      scopes: [],
+      warning: "META_PAGE_ACCESS_TOKEN is not set.",
+    };
+  }
+
+  try {
+    const url = new URL(`${GRAPH_BASE}/debug_token`);
+    url.searchParams.set("input_token", token);
+    url.searchParams.set("access_token", token);
+
+    const res = await fetch(url.toString(), { next: { revalidate: 0 } });
+    const body = (await res.json()) as DebugTokenResponse;
+    const data = body.data;
+
+    if (!data?.is_valid) {
+      return {
+        valid: false,
+        expiresAt: null,
+        daysUntilExpiry: null,
+        scopes: data?.scopes ?? [],
+        warning: data?.error?.message ?? "Meta Page token is invalid or expired.",
+      };
+    }
+
+    const expiresAt =
+      data.expires_at && data.expires_at > 0
+        ? new Date(data.expires_at * 1000).toISOString()
+        : null;
+    const daysUntilExpiry = expiresAt
+      ? Math.ceil((new Date(expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+      : null;
+
+    let warning: string | null = null;
+    if (daysUntilExpiry != null && daysUntilExpiry <= 14) {
+      warning = `Page token expires in ${daysUntilExpiry} day${daysUntilExpiry === 1 ? "" : "s"}. Regenerate in Graph API Explorer.`;
+    }
+
+    return {
+      valid: true,
+      expiresAt,
+      daysUntilExpiry,
+      scopes: data.scopes ?? [],
+      warning,
+    };
+  } catch {
+    return {
+      valid: false,
+      expiresAt: null,
+      daysUntilExpiry: null,
+      scopes: [],
+      warning: "Could not verify Meta Page token.",
+    };
+  }
 }

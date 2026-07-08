@@ -358,7 +358,8 @@ export const AGENT_FUNCTION_DECLARATIONS = [
   },
   {
     name: "get_analytics",
-    description: "Get click analytics summary for the TOOLQZ directory.",
+    description:
+      "Get analytics summary: outbound clicks, GA4 site traffic (if configured), Instagram/Facebook reach, and newsletter growth.",
     parameters: {
       type: "object",
       properties: {

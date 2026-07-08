@@ -1,7 +1,9 @@
 # TOOLQZ cron jobs (Hostinger — schedule via hPanel Cron Jobs or VPS crontab).
 # Replace YOUR_DOMAIN and YOUR_CRON_SECRET.
 #
-# Daily affiliate follow-ups (8:00 UTC)
+# Analytics snapshot — daily at 6:00 UTC
+# 0 6 * * * curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://YOUR_DOMAIN/api/cron/analytics-snapshot >/dev/null 2>&1
+#
 # 0 8 * * * curl -fsS -H "Authorization: Bearer YOUR_CRON_SECRET" https://YOUR_DOMAIN/api/cron/follow-ups >/dev/null 2>&1
 #
 # Daily task digest — 9:00 Europe/Lisbon (Portugal)
