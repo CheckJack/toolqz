@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { handleAuthError } from "@/lib/api-errors";
+import { notifyAnalyticsWarnings } from "@/lib/analytics-notifications";
 import { requireSession } from "@/lib/auth";
 import {
   fetchFacebookReport,
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
       : "30d";
 
     const data = await fetchFacebookReport(range);
+    void notifyAnalyticsWarnings(data.warnings, "facebook");
     return NextResponse.json(data);
   } catch (error) {
     if (

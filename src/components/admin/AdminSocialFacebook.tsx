@@ -1,18 +1,17 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { AdminChartCard } from "@/components/admin/charts/AdminChartCard";
 import { MultiMetricTrendChart } from "@/components/admin/charts/MultiMetricTrendChart";
 import { CHART, formatShortDate } from "@/lib/admin-charts";
 import {
-  AnalyticsWarnings,
   exportCsv,
   SocialRangePicker,
   type SocialRangeValue,
 } from "@/components/admin/AnalyticsShared";
-import { applyAnalyticsUrlParams } from "@/lib/analytics-ranges";
+import { replaceAnalyticsUrl } from "@/lib/analytics-url-client";
 import type { FacebookDiagnostics, FacebookReport } from "@/lib/facebook-server";
 import {
   MetaTokenNote,
@@ -59,11 +58,12 @@ function mergeDailyTrend(
 export function AdminSocialFacebook({
   initialData = null,
   initialStatus = null,
+  active = true,
 }: {
   initialData?: FacebookReport | null;
   initialStatus?: FacebookDiagnostics | null;
+  active?: boolean;
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const initialRange = searchParams.get("range");
   const [range, setRange] = useState<SocialRangeValue>(
@@ -80,9 +80,7 @@ export function AdminSocialFacebook({
 
   function syncRange(value: SocialRangeValue) {
     setRange(value);
-    const params = new URLSearchParams(searchParams.toString());
-    applyAnalyticsUrlParams(params, "facebook", value);
-    router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
+    replaceAnalyticsUrl("facebook", value);
   }
 
   function loadData() {
@@ -120,14 +118,16 @@ export function AdminSocialFacebook({
   }
 
   useEffect(() => {
+    if (!active) return;
     if (initialData && initialData.range === range) {
       setData(initialData);
       setStatus(initialStatus);
       setLoading(false);
       return;
     }
+    if (data?.range === range) return;
     loadData();
-  }, [range, initialData, initialStatus]);
+  }, [active, range, initialData, initialStatus]);
 
   if (error && !data) {
     return (
@@ -196,8 +196,6 @@ export function AdminSocialFacebook({
 
   return (
     <div className="space-y-6">
-      <AnalyticsWarnings warnings={report.warnings} />
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SocialRangePicker range={range} onChange={syncRange} />
         <button type="button" onClick={exportPostsCsv} className="admin-toolbar-btn">

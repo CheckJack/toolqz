@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import { AdminAnalytics } from "@/components/admin/AdminAnalytics";
 import { AdminAnalyticsOverview } from "@/components/admin/AdminAnalyticsOverview";
 import { AdminPageHeader } from "@/components/admin/AdminPageHeader";
@@ -10,11 +11,7 @@ import { AdminSocialFacebook } from "@/components/admin/AdminSocialFacebook";
 import { AdminSocialInstagram } from "@/components/admin/AdminSocialInstagram";
 import { applyAnalyticsUrlParams, type AnalyticsTab } from "@/lib/analytics-ranges";
 import type { AnalyticsOverviewReport } from "@/lib/analytics-overview";
-import type { OutboundClickAnalytics } from "@/lib/analytics-clicks";
-import type { FacebookDiagnostics, FacebookReport } from "@/lib/facebook-server";
-import type { Ga4SiteReport } from "@/lib/ga4-server";
-import type { InstagramDiagnostics, InstagramReport } from "@/lib/instagram-server";
-import type { ToolCtrRow } from "@/lib/analytics-tool-ctr";
+import { readAnalyticsTab, replaceAnalyticsUrl } from "@/lib/analytics-url-client";
 
 const TABS = [
   { id: "overview", label: "Overview" },
@@ -24,13 +21,21 @@ const TABS = [
   { id: "clicks", label: "Outbound clicks" },
 ] as const;
 
-type TabId = (typeof TABS)[number]["id"];
+export type AnalyticsHubTabId = (typeof TABS)[number]["id"];
 
 const GA4_URL = "https://analytics.google.com/";
 const INSTAGRAM_URL = "https://www.instagram.com/toolqz";
 const FACEBOOK_URL = "https://www.facebook.com/toolqz";
 
-function parseTab(tabParam: string | null): TabId {
+const PREFETCH_URLS: Record<AnalyticsHubTabId, string> = {
+  overview: "/api/admin/analytics/overview?range=30d",
+  traffic: "/api/admin/site-analytics?range=30d",
+  instagram: "/api/admin/social/instagram?range=30d",
+  facebook: "/api/admin/social/facebook?range=30d",
+  clicks: "/api/admin/analytics?range=30d",
+};
+
+function parseTab(tabParam: string | null): AnalyticsHubTabId {
   if (tabParam === "traffic") return "traffic";
   if (tabParam === "clicks") return "clicks";
   if (tabParam === "instagram") return "instagram";
@@ -40,32 +45,36 @@ function parseTab(tabParam: string | null): TabId {
 
 export function AdminAnalyticsHub({
   overviewInitial = null,
-  trafficInitial = null,
-  instagramInitial = null,
-  instagramStatus = null,
-  facebookInitial = null,
-  facebookStatus = null,
-  clicksInitial = null,
-  toolCtrInitial = null,
 }: {
   overviewInitial?: AnalyticsOverviewReport | null;
-  trafficInitial?: Ga4SiteReport | null;
-  instagramInitial?: InstagramReport | null;
-  instagramStatus?: InstagramDiagnostics | null;
-  facebookInitial?: FacebookReport | null;
-  facebookStatus?: FacebookDiagnostics | null;
-  clicksInitial?: OutboundClickAnalytics | null;
-  toolCtrInitial?: { configured: boolean; rows: ToolCtrRow[]; warning: string | null } | null;
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const activeTab = parseTab(searchParams.get("tab"));
+  const [activeTab, setActiveTab] = useState<AnalyticsHubTabId>(() =>
+    parseTab(searchParams.get("tab"))
+  );
 
-  function setTab(tab: TabId) {
-    const params = new URLSearchParams(searchParams.toString());
-    applyAnalyticsUrlParams(params, tab as AnalyticsTab, params.get("range") ?? undefined);
-    router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
-  }
+  useEffect(() => {
+    setActiveTab(parseTab(searchParams.get("tab")));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const onPopState = () => setActiveTab(readAnalyticsTab());
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const setTab = useCallback(
+    (tab: AnalyticsHubTabId) => {
+      setActiveTab(tab);
+      const range = searchParams.get("range") ?? undefined;
+      replaceAnalyticsUrl(tab as AnalyticsTab, range);
+    },
+    [searchParams]
+  );
+
+  const prefetchTab = useCallback((tab: AnalyticsHubTabId) => {
+    void fetch(PREFETCH_URLS[tab]).catch(() => {});
+  }, []);
 
   const description =
     activeTab === "overview"
@@ -113,6 +122,8 @@ export function AdminAnalyticsHub({
             key={tab.id}
             type="button"
             onClick={() => setTab(tab.id)}
+            onMouseEnter={() => prefetchTab(tab.id)}
+            onFocus={() => prefetchTab(tab.id)}
             className={`admin-segmented-btn whitespace-nowrap ${
               activeTab === tab.id ? "admin-segmented-btn-active" : ""
             }`}
@@ -122,32 +133,25 @@ export function AdminAnalyticsHub({
         ))}
       </div>
 
-      {activeTab === "overview" ? (
-        <AdminAnalyticsOverview initialData={overviewInitial} />
-      ) : activeTab === "traffic" ? (
-        <AdminSiteTraffic
-          key={`traffic-${searchParams.get("range") ?? "30d"}`}
-          initialData={trafficInitial}
+      <div className={activeTab === "overview" ? undefined : "hidden"}>
+        <AdminAnalyticsOverview
+          active={activeTab === "overview"}
+          initialData={overviewInitial}
+          onNavigateTab={setTab}
         />
-      ) : activeTab === "instagram" ? (
-        <AdminSocialInstagram
-          key={`instagram-${searchParams.get("range") ?? "30d"}`}
-          initialData={instagramInitial}
-          initialStatus={instagramStatus}
-        />
-      ) : activeTab === "facebook" ? (
-        <AdminSocialFacebook
-          key={`facebook-${searchParams.get("range") ?? "30d"}`}
-          initialData={facebookInitial}
-          initialStatus={facebookStatus}
-        />
-      ) : (
-        <AdminAnalytics
-          key={`clicks-${searchParams.get("range") ?? "30d"}`}
-          initialData={clicksInitial}
-          toolCtrInitial={toolCtrInitial}
-        />
-      )}
+      </div>
+      <div className={activeTab === "traffic" ? undefined : "hidden"}>
+        <AdminSiteTraffic active={activeTab === "traffic"} />
+      </div>
+      <div className={activeTab === "instagram" ? undefined : "hidden"}>
+        <AdminSocialInstagram active={activeTab === "instagram"} />
+      </div>
+      <div className={activeTab === "facebook" ? undefined : "hidden"}>
+        <AdminSocialFacebook active={activeTab === "facebook"} />
+      </div>
+      <div className={activeTab === "clicks" ? undefined : "hidden"}>
+        <AdminAnalytics active={activeTab === "clicks"} />
+      </div>
     </div>
   );
 }

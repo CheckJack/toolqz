@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, Pencil, Search } from "lucide-react";
 import { AdminRowActionsMenu } from "@/components/admin/AdminRowActionsMenu";
@@ -14,7 +14,8 @@ import { useToast } from "@/components/admin/Toast";
 import { CHART, toDailyChartRows, toRankChartRows } from "@/lib/admin-charts";
 import type { OutboundClickAnalytics } from "@/lib/analytics-clicks";
 import type { ToolCtrRow } from "@/lib/analytics-tool-ctr";
-import { applyAnalyticsUrlParams, parseClickRange } from "@/lib/analytics-ranges";
+import { parseClickRange } from "@/lib/analytics-ranges";
+import { replaceAnalyticsUrl } from "@/lib/analytics-url-client";
 
 interface ToolRow {
   toolId: string;
@@ -40,16 +41,17 @@ type ToolView = "all" | "with" | "zero";
 export function AdminAnalytics({
   initialData = null,
   toolCtrInitial = null,
+  active = true,
 }: {
   initialData?: Analytics | null;
   toolCtrInitial?: { configured: boolean; rows: ToolCtrRow[]; warning: string | null } | null;
+  active?: boolean;
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
   const [data, setData] = useState<Analytics | null>(initialData);
   const initialRange = searchParams.get("range");
-  const toolFilter = searchParams.get("tool") ?? "";
+  const [toolFilter, setToolFilter] = useState(() => searchParams.get("tool") ?? "");
   const [range, setRange] = useState<RangeValue>(parseClickRange(initialRange) as RangeValue);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(!initialData);
@@ -62,9 +64,7 @@ export function AdminAnalytics({
 
   function syncRange(value: RangeValue) {
     setRange(value);
-    const params = new URLSearchParams(searchParams.toString());
-    applyAnalyticsUrlParams(params, "clicks", value);
-    router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
+    replaceAnalyticsUrl("clicks", value, { tool: toolFilter || null });
   }
 
   function loadAnalytics() {
@@ -90,14 +90,26 @@ export function AdminAnalytics({
   }
 
   useEffect(() => {
-    if (initialData && initialData.range === range && toolCtrInitial) {
+    setToolFilter(searchParams.get("tool") ?? "");
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (!active) return;
+    if (initialData && initialData.range === range) {
       setData(initialData);
-      setToolCtr(toolCtrInitial);
+      if (toolCtrInitial) setToolCtr(toolCtrInitial);
       setLoading(false);
+      if (!toolCtrInitial) {
+        fetch(`/api/admin/analytics/tool-ctr?trafficRange=${range}&clickRange=${range}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((ctr) => ctr && setToolCtr(ctr))
+          .catch(() => {});
+      }
       return;
     }
+    if (data?.range === range && !toolFilter) return;
     loadAnalytics();
-  }, [range, toolFilter, initialData, toolCtrInitial]);
+  }, [active, range, toolFilter, initialData, toolCtrInitial]);
 
   async function importConversions() {
     if (!importCsv.trim()) return;
@@ -121,10 +133,8 @@ export function AdminAnalytics({
   }
 
   function clearToolFilter() {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", "clicks");
-    params.delete("tool");
-    router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
+    setToolFilter("");
+    replaceAnalyticsUrl("clicks", range, { tool: null });
   }
 
   function exportReferrers() {

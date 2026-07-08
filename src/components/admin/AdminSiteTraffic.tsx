@@ -1,16 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
 import { AdminChartCard } from "@/components/admin/charts/AdminChartCard";
 import { DailyAreaChart } from "@/components/admin/charts/DailyAreaChart";
 import { HorizontalBarChart } from "@/components/admin/charts/HorizontalBarChart";
 import { MultiMetricTrendChart } from "@/components/admin/charts/MultiMetricTrendChart";
-import { applyAnalyticsUrlParams } from "@/lib/analytics-ranges";
 import type { Ga4SiteReport } from "@/lib/ga4-server";
-import { AnalyticsWarnings } from "@/components/admin/AnalyticsShared";
+import { replaceAnalyticsUrl } from "@/lib/analytics-url-client";
 import { CHART, formatShortDate, toRankChartRows } from "@/lib/admin-charts";
 
 interface Ga4Status {
@@ -33,8 +32,13 @@ type RangeValue = (typeof RANGES)[number]["value"];
 
 const GA4_URL = "https://analytics.google.com/";
 
-export function AdminSiteTraffic({ initialData = null }: { initialData?: Ga4SiteReport | null }) {
-  const router = useRouter();
+export function AdminSiteTraffic({
+  initialData = null,
+  active = true,
+}: {
+  initialData?: Ga4SiteReport | null;
+  active?: boolean;
+}) {
   const searchParams = useSearchParams();
   const initialRange = searchParams.get("range");
   const [range, setRange] = useState<RangeValue>(
@@ -49,9 +53,7 @@ export function AdminSiteTraffic({ initialData = null }: { initialData?: Ga4Site
 
   function syncRange(value: RangeValue) {
     setRange(value);
-    const params = new URLSearchParams(searchParams.toString());
-    applyAnalyticsUrlParams(params, "traffic", value);
-    router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
+    replaceAnalyticsUrl("traffic", value);
   }
 
   function loadData() {
@@ -78,13 +80,15 @@ export function AdminSiteTraffic({ initialData = null }: { initialData?: Ga4Site
   }
 
   useEffect(() => {
+    if (!active) return;
     if (initialData && initialData.range === range) {
       setData(initialData);
       setLoading(false);
       return;
     }
+    if (data?.range === range) return;
     loadData();
-  }, [range, initialData]);
+  }, [active, range, initialData]);
 
   if (error && !data) {
     const isConfig =
@@ -182,7 +186,6 @@ export function AdminSiteTraffic({ initialData = null }: { initialData?: Ga4Site
 
   return (
     <div className="space-y-6">
-      <AnalyticsWarnings warnings={data.warnings} />
       <div className="admin-segmented w-fit max-w-full overflow-x-auto">
         {RANGES.map((r) => (
           <button

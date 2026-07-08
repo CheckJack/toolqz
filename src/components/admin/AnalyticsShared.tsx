@@ -35,20 +35,6 @@ export function SocialRangePicker({
   );
 }
 
-export function AnalyticsWarnings({ warnings }: { warnings: string[] }) {
-  if (warnings.length === 0) return null;
-  return (
-    <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-amber-200">
-      <p className="font-medium text-amber-100">Data warnings</p>
-      <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-200/90">
-        {warnings.map((warning) => (
-          <li key={warning}>{warning}</li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 export function AnalyticsHealthStrip({
   health,
   fetchedAt,

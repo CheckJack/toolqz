@@ -311,6 +311,11 @@ export async function fetchGa4OverviewLite(range: Ga4Range = "30d") {
       pageViewsChangePct: report.pageViewsChangePct,
       blogPageViews: report.blogPageViews,
       realtimeActiveUsers: report.realtimeActiveUsers,
+      daily: report.daily.map((row) => ({
+        date: row.date,
+        users: row.users,
+        pageViews: row.pageViews,
+      })),
       warnings: report.warnings,
     };
   } catch {

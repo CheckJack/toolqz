@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { ExternalLink } from "lucide-react";
 import { AdminSkeleton } from "@/components/admin/AdminSkeleton";
@@ -10,12 +10,11 @@ import { DailyAreaChart } from "@/components/admin/charts/DailyAreaChart";
 import { CHART, formatShortDate } from "@/lib/admin-charts";
 import type { InstagramDiagnostics, InstagramReport } from "@/lib/instagram-server";
 import {
-  AnalyticsWarnings,
   exportCsv,
   SocialRangePicker,
   type SocialRangeValue,
 } from "@/components/admin/AnalyticsShared";
-import { applyAnalyticsUrlParams } from "@/lib/analytics-ranges";
+import { replaceAnalyticsUrl } from "@/lib/analytics-url-client";
 
 const INSTAGRAM_URL = "https://www.instagram.com/toolqz";
 
@@ -34,11 +33,12 @@ function formatPostDate(iso: string): string {
 export function AdminSocialInstagram({
   initialData = null,
   initialStatus = null,
+  active = true,
 }: {
   initialData?: InstagramReport | null;
   initialStatus?: InstagramDiagnostics | null;
+  active?: boolean;
 }) {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const initialRange = searchParams.get("range");
   const [range, setRange] = useState<SocialRangeValue>(
@@ -55,9 +55,7 @@ export function AdminSocialInstagram({
 
   function syncRange(value: SocialRangeValue) {
     setRange(value);
-    const params = new URLSearchParams(searchParams.toString());
-    applyAnalyticsUrlParams(params, "instagram", value);
-    router.replace(`/admin/analytics?${params.toString()}`, { scroll: false });
+    replaceAnalyticsUrl("instagram", value);
   }
 
   function loadData() {
@@ -95,14 +93,16 @@ export function AdminSocialInstagram({
   }
 
   useEffect(() => {
+    if (!active) return;
     if (initialData && initialData.range === range) {
       setData(initialData);
       setStatus(initialStatus);
       setLoading(false);
       return;
     }
+    if (data?.range === range) return;
     loadData();
-  }, [range, initialData, initialStatus]);
+  }, [active, range, initialData, initialStatus]);
 
   if (error && !data) {
     return (
@@ -172,8 +172,6 @@ export function AdminSocialInstagram({
 
   return (
     <div className="space-y-6">
-      <AnalyticsWarnings warnings={report.warnings} />
-
       <div className="flex flex-wrap items-center justify-between gap-3">
         <SocialRangePicker range={range} onChange={syncRange} />
         <button type="button" onClick={exportPostsCsv} className="admin-toolbar-btn">

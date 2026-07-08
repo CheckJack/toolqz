@@ -52,6 +52,7 @@ function typeLabel(type: string): string | null {
   if (type === "task_completed") return "Task";
   if (type.startsWith("build_")) return "Deploy";
   if (type === "site_down" || type === "site_recovered") return "Hosting";
+  if (type === "analytics_warning") return "Analytics";
   return null;
 }
 

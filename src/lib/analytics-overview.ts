@@ -50,6 +50,11 @@ export interface AnalyticsOverviewReport {
     totalActive: number;
     newInRange: number;
   };
+  trends: {
+    siteDaily: { date: string; users: number; pageViews: number }[];
+    clicksDaily: { date: string; count: number }[];
+    newsletterDaily: { date: string; count: number }[];
+  };
   snapshots: Awaited<ReturnType<typeof getRecentSnapshots>>;
   warnings: string[];
 }
@@ -58,70 +63,66 @@ export async function fetchAnalyticsOverview(
   rangeInput?: string
 ): Promise<AnalyticsOverviewReport> {
   const range = parseSocialRange(rangeInput);
+  const clickRange = range === "90d" ? "90d" : range;
   const warnings: string[] = [];
 
-  const [ga4Diag, igDiag, fbDiag, clicks, newsletter, snapshots] = await Promise.all([
-    Promise.resolve(getGa4Diagnostics()),
-    getInstagramDiagnostics(),
-    getFacebookDiagnostics(),
-    fetchOutboundClickAnalytics(range === "90d" ? "90d" : range),
-    fetchNewsletterTrend(range),
-    getRecentSnapshots(14),
-  ]);
+  const [ga4Diag, igDiag, fbDiag, clicks, newsletter, snapshots, ga4Lite, igReport, fbReport] =
+    await Promise.all([
+      Promise.resolve(getGa4Diagnostics()),
+      getInstagramDiagnostics(),
+      getFacebookDiagnostics(),
+      fetchOutboundClickAnalytics(clickRange),
+      fetchNewsletterTrend(range),
+      getRecentSnapshots(14),
+      fetchGa4OverviewLite(clickRange).catch(() => null),
+      fetchInstagramReport(range).catch((error: unknown) => {
+        warnings.push(error instanceof Error ? error.message : "Instagram overview failed");
+        return null;
+      }),
+      fetchFacebookReport(range).catch((error: unknown) => {
+        warnings.push(error instanceof Error ? error.message : "Facebook overview failed");
+        return null;
+      }),
+    ]);
 
   let site: AnalyticsOverviewReport["site"] = null;
-  try {
-    const lite = await fetchGa4OverviewLite(range === "90d" ? "90d" : range);
-    if (lite) {
-      site = {
-        configured: true,
-        users: lite.users,
-        pageViews: lite.pageViews,
-        sessions: lite.sessions,
-        usersChangePct: lite.usersChangePct,
-        pageViewsChangePct: lite.pageViewsChangePct,
-        blogPageViews: lite.blogPageViews,
-        realtimeActiveUsers: lite.realtimeActiveUsers,
-        warnings: lite.warnings,
-      };
-      warnings.push(...lite.warnings);
-    }
-  } catch (error) {
-    warnings.push(error instanceof Error ? error.message : "GA4 overview failed");
+  if (ga4Lite) {
+    site = {
+      configured: true,
+      users: ga4Lite.users,
+      pageViews: ga4Lite.pageViews,
+      sessions: ga4Lite.sessions,
+      usersChangePct: ga4Lite.usersChangePct,
+      pageViewsChangePct: ga4Lite.pageViewsChangePct,
+      blogPageViews: ga4Lite.blogPageViews,
+      realtimeActiveUsers: ga4Lite.realtimeActiveUsers,
+      warnings: ga4Lite.warnings,
+    };
+    warnings.push(...ga4Lite.warnings);
   }
 
   let instagram: AnalyticsOverviewReport["instagram"] = null;
-  try {
-    const report = await fetchInstagramReport(range);
-    if (report.configured) {
-      instagram = {
-        configured: true,
-        followersCount: report.followersCount,
-        totalReach: report.totalReach,
-        profileViews: report.profileViews,
-        warnings: report.warnings,
-      };
-      warnings.push(...report.warnings);
-    }
-  } catch (error) {
-    warnings.push(error instanceof Error ? error.message : "Instagram overview failed");
+  if (igReport?.configured) {
+    instagram = {
+      configured: true,
+      followersCount: igReport.followersCount,
+      totalReach: igReport.totalReach,
+      profileViews: igReport.profileViews,
+      warnings: igReport.warnings,
+    };
+    warnings.push(...igReport.warnings);
   }
 
   let facebook: AnalyticsOverviewReport["facebook"] = null;
-  try {
-    const report = await fetchFacebookReport(range);
-    if (report.configured) {
-      facebook = {
-        configured: true,
-        followersCount: report.followersCount,
-        totalReach: report.totalReach,
-        totalEngagement: report.totalEngagement,
-        warnings: report.warnings,
-      };
-      warnings.push(...report.warnings);
-    }
-  } catch (error) {
-    warnings.push(error instanceof Error ? error.message : "Facebook overview failed");
+  if (fbReport?.configured) {
+    facebook = {
+      configured: true,
+      followersCount: fbReport.followersCount,
+      totalReach: fbReport.totalReach,
+      totalEngagement: fbReport.totalEngagement,
+      warnings: fbReport.warnings,
+    };
+    warnings.push(...fbReport.warnings);
   }
 
   const tokenHealth = igDiag.tokenHealth ?? fbDiag.tokenHealth;
@@ -151,6 +152,11 @@ export async function fetchAnalyticsOverview(
     newsletter: {
       totalActive: newsletter.totalActive,
       newInRange: newsletter.newInRange,
+    },
+    trends: {
+      siteDaily: ga4Lite?.daily ?? [],
+      clicksDaily: clicks.dailyClicks,
+      newsletterDaily: newsletter.daily,
     },
     snapshots,
     warnings: [...new Set(warnings.filter(Boolean))],
