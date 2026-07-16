@@ -67,6 +67,8 @@ export function AdminNotes({ user }: { user: SessionUser }) {
   const [uploading, setUploading] = useState(false);
   const editorRef = useRef<NoteRichTextEditorHandle>(null);
   const hydratedNoteIdRef = useRef<string | null>(null);
+  // Gate TipTap mount until drafts are set for the selected note (avoids empty init race).
+  const [editorNoteId, setEditorNoteId] = useState<string | null>(null);
 
   const selected = useMemo(
     () => notes.find((n) => n.id === selectedId) ?? null,
@@ -96,22 +98,18 @@ export function AdminNotes({ user }: { user: SessionUser }) {
     void load();
   }, [load]);
 
-  // Only hydrate drafts when switching notes — not when the same note is
-  // refreshed after link/upload/save (that was wiping unsaved body text).
-  useEffect(() => {
-    if (!selected) {
-      hydratedNoteIdRef.current = null;
-      return;
-    }
-    if (hydratedNoteIdRef.current === selected.id) return;
-    hydratedNoteIdRef.current = selected.id;
-    setDraftTitle(selected.title);
-    setDraftContent(selected.content);
-    setDraftVisibility(selected.visibility);
-    setDraftPinned(selected.pinned);
-  }, [selected]);
+  function applyNoteDrafts(note: Note) {
+    hydratedNoteIdRef.current = note.id;
+    setDraftTitle(note.title);
+    setDraftContent(note.content ?? "");
+    setDraftVisibility(note.visibility);
+    setDraftPinned(note.pinned);
+    setEditorNoteId(note.id);
+  }
 
   function selectNote(note: Note) {
+    // Set drafts in the same turn as selection so TipTap mounts with real content.
+    applyNoteDrafts(note);
     setSelectedId(note.id);
   }
 
@@ -134,6 +132,7 @@ export function AdminNotes({ user }: { user: SessionUser }) {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not create");
       setNotes((prev) => [data, ...prev]);
+      applyNoteDrafts(data);
       setSelectedId(data.id);
       toast("Note created", "success");
     } catch (e) {
@@ -156,7 +155,7 @@ export function AdminNotes({ user }: { user: SessionUser }) {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: draftTitle,
+          title: draftTitle.trim() || "Untitled note",
           content,
           visibility: draftVisibility,
           pinned: draftPinned,
@@ -164,12 +163,20 @@ export function AdminNotes({ user }: { user: SessionUser }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not save");
+      if (typeof data.content !== "string") {
+        throw new Error("Save succeeded but content was not returned — check server/DB");
+      }
       mergeNote(data);
       setDraftTitle(data.title);
       setDraftContent(data.content);
       setDraftVisibility(data.visibility);
       setDraftPinned(data.pinned);
-      toast("Note saved", "success");
+      toast(
+        data.content && data.content !== "<p></p>"
+          ? "Note saved"
+          : "Note saved (body is empty — type in the editor then Save again)",
+        data.content && data.content !== "<p></p>" ? "success" : "error"
+      );
     } catch (e) {
       toast(e instanceof Error ? e.message : "Could not save", "error");
     } finally {
@@ -188,6 +195,8 @@ export function AdminNotes({ user }: { user: SessionUser }) {
     }
     setNotes((prev) => prev.filter((n) => n.id !== selected.id));
     setSelectedId(null);
+    setEditorNoteId(null);
+    hydratedNoteIdRef.current = null;
     toast("Note deleted", "success");
   }
 
@@ -471,13 +480,19 @@ export function AdminNotes({ user }: { user: SessionUser }) {
               </div>
             </div>
 
-            <NoteRichTextEditor
-              key={selected.id}
-              ref={editorRef}
-              value={draftContent}
-              onChange={setDraftContent}
-              editable={canEdit}
-            />
+            {editorNoteId === selected.id ? (
+              <NoteRichTextEditor
+                key={selected.id}
+                ref={editorRef}
+                value={draftContent}
+                onChange={setDraftContent}
+                editable={canEdit}
+              />
+            ) : (
+              <div className="min-h-[220px] rounded-lg border border-dark-border bg-dark-elevated px-4 py-3 text-muted">
+                Loading editor…
+              </div>
+            )}
 
             <div className="grid gap-5 border-t border-dark-border pt-5 md:grid-cols-2">
               <div>

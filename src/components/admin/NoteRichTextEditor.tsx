@@ -4,6 +4,7 @@ import {
   forwardRef,
   useEffect,
   useImperativeHandle,
+  useRef,
 } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -13,6 +14,12 @@ import Placeholder from "@tiptap/extension-placeholder";
 
 const btn =
   "rounded-md border border-dark-border bg-dark-elevated px-2 py-1 text-[12px] font-medium text-muted hover:border-white/20 hover:text-white disabled:opacity-40";
+
+function normalizeHtml(html: string): string {
+  const trimmed = (html || "").trim();
+  if (!trimmed || trimmed === "<p></p>" || trimmed === "<p><br></p>") return "";
+  return trimmed;
+}
 
 export type NoteRichTextEditorHandle = {
   getHTML: () => string;
@@ -35,6 +42,10 @@ export const NoteRichTextEditor = forwardRef<
   },
   ref
 ) {
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const lastEmittedRef = useRef(value || "");
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -51,7 +62,9 @@ export const NoteRichTextEditor = forwardRef<
     editable,
     immediatelyRender: false,
     onUpdate: ({ editor: ed }) => {
-      onChange(ed.getHTML());
+      const html = ed.getHTML();
+      lastEmittedRef.current = html;
+      onChangeRef.current(html);
     },
     editorProps: {
       attributes: {
@@ -64,7 +77,10 @@ export const NoteRichTextEditor = forwardRef<
   useImperativeHandle(
     ref,
     () => ({
-      getHTML: () => editor?.getHTML() ?? value ?? "",
+      getHTML: () => {
+        if (!editor) return value || "";
+        return editor.getHTML();
+      },
     }),
     [editor, value]
   );
@@ -73,6 +89,16 @@ export const NoteRichTextEditor = forwardRef<
     if (!editor) return;
     editor.setEditable(editable);
   }, [editable, editor]);
+
+  // Only apply value when it changed from outside TipTap (note switch / reload),
+  // not when onChange just echoed the same edit back up.
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const next = value || "";
+    if (normalizeHtml(next) === normalizeHtml(lastEmittedRef.current)) return;
+    editor.commands.setContent(next, { emitUpdate: false });
+    lastEmittedRef.current = next;
+  }, [editor, value]);
 
   if (!editor) {
     return (
