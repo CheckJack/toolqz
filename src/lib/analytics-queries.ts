@@ -24,7 +24,7 @@ async function queryDailyClicksSqlite(range: ClickRange, toolId?: string): Promi
         await prisma.$queryRaw<{ date: string; count: number }[]>`
           SELECT date(clickedAt) as date, COUNT(*) as count
           FROM Click
-          WHERE toolId = ${toolId}
+          WHERE toolId = ${toolId} AND isBot = 0
           GROUP BY date(clickedAt)
           ORDER BY date ASC
         `
@@ -35,7 +35,7 @@ async function queryDailyClicksSqlite(range: ClickRange, toolId?: string): Promi
         await prisma.$queryRaw<{ date: string; count: number }[]>`
           SELECT date(clickedAt) as date, COUNT(*) as count
           FROM Click
-          WHERE toolId = ${toolId} AND clickedAt >= datetime('now', '-7 days')
+          WHERE toolId = ${toolId} AND isBot = 0 AND clickedAt >= datetime('now', '-7 days')
           GROUP BY date(clickedAt)
           ORDER BY date ASC
         `
@@ -46,7 +46,7 @@ async function queryDailyClicksSqlite(range: ClickRange, toolId?: string): Promi
         await prisma.$queryRaw<{ date: string; count: number }[]>`
           SELECT date(clickedAt) as date, COUNT(*) as count
           FROM Click
-          WHERE toolId = ${toolId} AND clickedAt >= datetime('now', '-90 days')
+          WHERE toolId = ${toolId} AND isBot = 0 AND clickedAt >= datetime('now', '-90 days')
           GROUP BY date(clickedAt)
           ORDER BY date ASC
         `
@@ -56,7 +56,7 @@ async function queryDailyClicksSqlite(range: ClickRange, toolId?: string): Promi
       await prisma.$queryRaw<{ date: string; count: number }[]>`
         SELECT date(clickedAt) as date, COUNT(*) as count
         FROM Click
-        WHERE toolId = ${toolId} AND clickedAt >= datetime('now', '-30 days')
+        WHERE toolId = ${toolId} AND isBot = 0 AND clickedAt >= datetime('now', '-30 days')
         GROUP BY date(clickedAt)
         ORDER BY date ASC
       `
@@ -68,6 +68,7 @@ async function queryDailyClicksSqlite(range: ClickRange, toolId?: string): Promi
       await prisma.$queryRaw<{ date: string; count: number }[]>`
         SELECT date(clickedAt) as date, COUNT(*) as count
         FROM Click
+        WHERE isBot = 0
         GROUP BY date(clickedAt)
         ORDER BY date ASC
       `
@@ -78,7 +79,7 @@ async function queryDailyClicksSqlite(range: ClickRange, toolId?: string): Promi
       await prisma.$queryRaw<{ date: string; count: number }[]>`
         SELECT date(clickedAt) as date, COUNT(*) as count
         FROM Click
-        WHERE clickedAt >= datetime('now', '-7 days')
+        WHERE isBot = 0 AND clickedAt >= datetime('now', '-7 days')
         GROUP BY date(clickedAt)
         ORDER BY date ASC
       `
@@ -89,7 +90,7 @@ async function queryDailyClicksSqlite(range: ClickRange, toolId?: string): Promi
       await prisma.$queryRaw<{ date: string; count: number }[]>`
         SELECT date(clickedAt) as date, COUNT(*) as count
         FROM Click
-        WHERE clickedAt >= datetime('now', '-90 days')
+        WHERE isBot = 0 AND clickedAt >= datetime('now', '-90 days')
         GROUP BY date(clickedAt)
         ORDER BY date ASC
       `
@@ -99,7 +100,7 @@ async function queryDailyClicksSqlite(range: ClickRange, toolId?: string): Promi
     await prisma.$queryRaw<{ date: string; count: number }[]>`
       SELECT date(clickedAt) as date, COUNT(*) as count
       FROM Click
-      WHERE clickedAt >= datetime('now', '-30 days')
+      WHERE isBot = 0 AND clickedAt >= datetime('now', '-30 days')
       GROUP BY date(clickedAt)
       ORDER BY date ASC
     `
@@ -113,7 +114,7 @@ async function queryDailyClicksPostgres(range: ClickRange, toolId?: string): Pro
         await prisma.$queryRaw<{ date: string; count: bigint }[]>`
           SELECT TO_CHAR("clickedAt"::date, 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
           FROM "Click"
-          WHERE "toolId" = ${toolId}
+          WHERE "toolId" = ${toolId} AND "isBot" = false
           GROUP BY "clickedAt"::date
           ORDER BY date ASC
         `
@@ -124,7 +125,7 @@ async function queryDailyClicksPostgres(range: ClickRange, toolId?: string): Pro
         await prisma.$queryRaw<{ date: string; count: bigint }[]>`
           SELECT TO_CHAR("clickedAt"::date, 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
           FROM "Click"
-          WHERE "toolId" = ${toolId} AND "clickedAt" >= NOW() - INTERVAL '7 days'
+          WHERE "toolId" = ${toolId} AND "isBot" = false AND "clickedAt" >= NOW() - INTERVAL '7 days'
           GROUP BY "clickedAt"::date
           ORDER BY date ASC
         `
@@ -135,7 +136,7 @@ async function queryDailyClicksPostgres(range: ClickRange, toolId?: string): Pro
         await prisma.$queryRaw<{ date: string; count: bigint }[]>`
           SELECT TO_CHAR("clickedAt"::date, 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
           FROM "Click"
-          WHERE "toolId" = ${toolId} AND "clickedAt" >= NOW() - INTERVAL '90 days'
+          WHERE "toolId" = ${toolId} AND "isBot" = false AND "clickedAt" >= NOW() - INTERVAL '90 days'
           GROUP BY "clickedAt"::date
           ORDER BY date ASC
         `
@@ -145,7 +146,7 @@ async function queryDailyClicksPostgres(range: ClickRange, toolId?: string): Pro
       await prisma.$queryRaw<{ date: string; count: bigint }[]>`
         SELECT TO_CHAR("clickedAt"::date, 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
         FROM "Click"
-        WHERE "toolId" = ${toolId} AND "clickedAt" >= NOW() - INTERVAL '30 days'
+        WHERE "toolId" = ${toolId} AND "isBot" = false AND "clickedAt" >= NOW() - INTERVAL '30 days'
         GROUP BY "clickedAt"::date
         ORDER BY date ASC
       `
@@ -157,6 +158,7 @@ async function queryDailyClicksPostgres(range: ClickRange, toolId?: string): Pro
       await prisma.$queryRaw<{ date: string; count: bigint }[]>`
         SELECT TO_CHAR("clickedAt"::date, 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
         FROM "Click"
+        WHERE "isBot" = false
         GROUP BY "clickedAt"::date
         ORDER BY date ASC
       `
@@ -167,7 +169,7 @@ async function queryDailyClicksPostgres(range: ClickRange, toolId?: string): Pro
       await prisma.$queryRaw<{ date: string; count: bigint }[]>`
         SELECT TO_CHAR("clickedAt"::date, 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
         FROM "Click"
-        WHERE "clickedAt" >= NOW() - INTERVAL '7 days'
+        WHERE "isBot" = false AND "clickedAt" >= NOW() - INTERVAL '7 days'
         GROUP BY "clickedAt"::date
         ORDER BY date ASC
       `
@@ -178,7 +180,7 @@ async function queryDailyClicksPostgres(range: ClickRange, toolId?: string): Pro
       await prisma.$queryRaw<{ date: string; count: bigint }[]>`
         SELECT TO_CHAR("clickedAt"::date, 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
         FROM "Click"
-        WHERE "clickedAt" >= NOW() - INTERVAL '90 days'
+        WHERE "isBot" = false AND "clickedAt" >= NOW() - INTERVAL '90 days'
         GROUP BY "clickedAt"::date
         ORDER BY date ASC
       `
@@ -188,7 +190,7 @@ async function queryDailyClicksPostgres(range: ClickRange, toolId?: string): Pro
     await prisma.$queryRaw<{ date: string; count: bigint }[]>`
       SELECT TO_CHAR("clickedAt"::date, 'YYYY-MM-DD') AS date, COUNT(*)::int AS count
       FROM "Click"
-      WHERE "clickedAt" >= NOW() - INTERVAL '30 days'
+      WHERE "isBot" = false AND "clickedAt" >= NOW() - INTERVAL '30 days'
       GROUP BY "clickedAt"::date
       ORDER BY date ASC
     `

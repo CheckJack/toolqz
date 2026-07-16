@@ -1,3 +1,9 @@
+import {
+  buildTrackedRedirectUrl,
+  CLICK_DEDUP_WINDOW_MS,
+  parseClickContext,
+  type ClickTrackingInput,
+} from "@/lib/click-tracking";
 import { prisma } from "@/lib/db";
 import { resolveToolLogoUrl } from "@/lib/logo-url";
 import { Website } from "@/types";
@@ -115,6 +121,10 @@ export async function getRelatedWebsites(
   return tools.map(mapToolToWebsite);
 }
 
+function resolveListingType(tool: Tool): "AFFILIATE" | "EDITORIAL" {
+  return tool.listingType === "AFFILIATE" ? "AFFILIATE" : "EDITORIAL";
+}
+
 export async function getToolRedirectUrl(slug: string): Promise<string | null> {
   const resolved = await resolvePublishedToolSlug(slug);
   if (!resolved) return null;
@@ -125,19 +135,69 @@ export async function getToolRedirectUrl(slug: string): Promise<string | null> {
   return tool.url;
 }
 
-export async function recordClick(
-  slug: string,
-  meta: { referrer?: string | null; userAgent?: string | null }
-) {
-  const resolved = await resolvePublishedToolSlug(slug);
-  if (!resolved) return false;
+export type RecordClickResult =
+  | { recorded: false; reason: "unknown_tool" | "duplicate" | "bot" }
+  | { recorded: true; clickId: string; redirectUrl: string };
 
-  await prisma.click.create({
+export async function recordClick(input: ClickTrackingInput): Promise<RecordClickResult> {
+  const resolved = await resolvePublishedToolSlug(input.slug);
+  if (!resolved) return { recorded: false, reason: "unknown_tool" };
+
+  const { tool } = resolved;
+  const context = parseClickContext(input);
+
+  if (context.isBot) {
+    return { recorded: false, reason: "bot" };
+  }
+
+  if (context.ipHash) {
+    const dedupeSince = new Date(Date.now() - CLICK_DEDUP_WINDOW_MS);
+    const recent = await prisma.click.findFirst({
+      where: {
+        toolId: tool.id,
+        ipHash: context.ipHash,
+        isBot: false,
+        clickedAt: { gte: dedupeSince },
+      },
+      select: { id: true },
+    });
+    if (recent) {
+      return { recorded: false, reason: "duplicate" };
+    }
+  }
+
+  const affiliateProgram = await prisma.affiliateProgram.findUnique({
+    where: { toolId: tool.id },
+    select: { id: true },
+  });
+
+  const listingType = resolveListingType(tool);
+  const destination =
+    listingType === "AFFILIATE" && tool.affiliateUrl?.trim()
+      ? tool.affiliateUrl.trim()
+      : tool.url;
+
+  const click = await prisma.click.create({
     data: {
-      toolId: resolved.tool.id,
-      referrer: meta.referrer ?? null,
-      userAgent: meta.userAgent ?? null,
+      toolId: tool.id,
+      referrer: input.referrer ?? null,
+      userAgent: input.userAgent ?? null,
+      utmSource: context.utmSource,
+      utmMedium: context.utmMedium,
+      utmCampaign: context.utmCampaign,
+      utmContent: context.utmContent,
+      utmTerm: context.utmTerm,
+      sourcePage: context.sourcePage,
+      listingType,
+      affiliateProgramId: affiliateProgram?.id ?? null,
+      isBot: false,
+      ipHash: context.ipHash,
     },
   });
-  return true;
+
+  return {
+    recorded: true,
+    clickId: click.id,
+    redirectUrl: buildTrackedRedirectUrl(destination, click.id, tool.slug, listingType),
+  };
 }

@@ -159,7 +159,7 @@ export function AdminNotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-dark-border bg-dark-elevated shadow-xl">
+        <div className="absolute right-0 z-[200] mt-2 w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-2xl border border-dark-border bg-dark-elevated shadow-2xl">
           <div className="flex items-center justify-between border-b border-dark-border px-4 py-3">
             <span className="text-sm font-semibold">Notifications</span>
             {unread > 0 && (

@@ -139,14 +139,81 @@ export const AGENT_FUNCTION_DECLARATIONS = [
     },
   },
   {
+    name: "suggest_content_ideas",
+    description:
+      "Brainstorm TOOLQZ-relevant blog/content ideas (titles + angles only). Does NOT write or save posts. Use for planning and 'ideas only' requests.",
+    parameters: {
+      type: "object",
+      properties: {
+        brief: {
+          type: "string",
+          description: "What the user wants ideas about (e.g. next 5 blog topics for productivity tools)",
+        },
+        count: {
+          type: "number",
+          description: "How many ideas (default 5, max 10)",
+        },
+        category: {
+          type: "string",
+          description: "Optional category filter to ground ideas in catalog tools",
+        },
+      },
+      required: ["brief"],
+    },
+  },
+  {
+    name: "plan_marketing",
+    description:
+      "Plan TOOLQZ marketing across Instagram, TikTok, YouTube, newsletter, and/or blog: calendars, demo video scripts, hooks, newsletter outlines, cross-channel campaigns. Planning only — does not publish or save blog posts.",
+    parameters: {
+      type: "object",
+      properties: {
+        brief: {
+          type: "string",
+          description:
+            "What to plan (e.g. weekly partner demo Reels, newsletter for March, campaign for a tool)",
+        },
+        kind: {
+          type: "string",
+          description:
+            "calendar | video_scripts | newsletter | campaign | hooks (default campaign)",
+        },
+        channels: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "Optional: instagram, tiktok, youtube, newsletter, blog, cross_channel",
+        },
+        count: {
+          type: "number",
+          description: "How many plan items (default 5, max 14)",
+        },
+        category: {
+          type: "string",
+          description: "Optional category filter for catalog tools to feature",
+        },
+        include_analytics: {
+          type: "boolean",
+          description: "If true, include a short analytics snapshot in the planning context",
+        },
+      },
+      required: ["brief"],
+    },
+  },
+  {
     name: "create_blog_draft",
-    description: "Write a new unpublished blog post draft on a given topic.",
+    description:
+      "Write and SAVE a full unpublished TOOLQZ blog draft (markdown). Only use when the user wants a complete article drafted — NOT for ideas/planning/outlines/scripts.",
     parameters: {
       type: "object",
       properties: {
         topic: {
           type: "string",
-          description: "Blog topic or title idea (required)",
+          description: "Blog topic or working title (required)",
+        },
+        angle: {
+          type: "string",
+          description: "Optional editorial angle or audience focus",
         },
       },
       required: ["topic"],
@@ -543,6 +610,96 @@ export const AGENT_FUNCTION_DECLARATIONS = [
     },
   },
   {
+    name: "list_notes",
+    description:
+      "List admin notes visible to the current user (private own notes + shared team notes).",
+    parameters: {
+      type: "object",
+      properties: {
+        search: { type: "string" },
+        visibility: {
+          type: "string",
+          description: "PRIVATE or SHARED filter",
+        },
+        limit: { type: "number" },
+      },
+    },
+  },
+  {
+    name: "get_note",
+    description: "Get a note by note_id or note_title (full content, links, attachments).",
+    parameters: {
+      type: "object",
+      properties: {
+        note_id: { type: "string" },
+        note_title: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "create_note",
+    description:
+      "Create an admin note (title + content). visibility PRIVATE (only creator) or SHARED (whole team). Optional links array.",
+    parameters: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Note title (required)" },
+        content: {
+          type: "string",
+          description: "Note body as HTML or plain text paragraphs",
+        },
+        visibility: {
+          type: "string",
+          description: "PRIVATE (default) or SHARED",
+        },
+        pinned: { type: "boolean" },
+        links: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              url: { type: "string" },
+              label: { type: "string" },
+            },
+          },
+          description: "Optional related links to attach",
+        },
+      },
+      required: ["title"],
+    },
+  },
+  {
+    name: "update_note",
+    description:
+      "Update a note's title, content, visibility, pinned, or add a link. Identify by note_id or note_title.",
+    parameters: {
+      type: "object",
+      properties: {
+        note_id: { type: "string" },
+        note_title: { type: "string" },
+        title: { type: "string" },
+        content: { type: "string" },
+        visibility: { type: "string" },
+        pinned: { type: "boolean" },
+        add_link_url: { type: "string" },
+        add_link_label: { type: "string" },
+      },
+    },
+  },
+  {
+    name: "delete_note",
+    description:
+      "Delete a note (owner or admin). Call with confirm:false first; confirm:true only after user agrees.",
+    parameters: {
+      type: "object",
+      properties: {
+        note_id: { type: "string" },
+        note_title: { type: "string" },
+        confirm: { type: "boolean" },
+      },
+    },
+  },
+  {
     name: "list_team_members",
     description: "List admin team members (for assigning tasks or affiliates).",
     parameters: {
@@ -644,6 +801,8 @@ export type AgentToolName =
   | "feature_tool"
   | "create_category"
   | "list_categories"
+  | "suggest_content_ideas"
+  | "plan_marketing"
   | "create_blog_draft"
   | "list_blog_posts"
   | "publish_blog"
@@ -670,6 +829,11 @@ export type AgentToolName =
   | "update_finance_entry"
   | "delete_finance_entry"
   | "list_team_members"
+  | "list_notes"
+  | "get_note"
+  | "create_note"
+  | "update_note"
+  | "delete_note"
   | "search_playbook"
   | "create_playbook_snippet"
   | "update_playbook_snippet"

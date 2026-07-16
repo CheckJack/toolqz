@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getClientIp } from "@/lib/rate-limit";
 import { getCanonicalToolSlug, getToolRedirectUrl, recordClick } from "@/lib/tools";
 
 export async function GET(
@@ -16,16 +17,21 @@ export async function GET(
     return NextResponse.redirect(new URL(`/go/${canonicalSlug}`, request.url), 308);
   }
 
-  const destination = await getToolRedirectUrl(slug);
+  const fallbackDestination = await getToolRedirectUrl(slug);
 
-  if (!destination) {
+  if (!fallbackDestination) {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
-  await recordClick(slug, {
+  const result = await recordClick({
+    slug,
     referrer: request.headers.get("referer"),
     userAgent: request.headers.get("user-agent"),
+    ip: getClientIp(request),
+    requestUrl: request.url,
   });
+
+  const destination = result.recorded ? result.redirectUrl : fallbackDestination;
 
   return NextResponse.redirect(destination);
 }

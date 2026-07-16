@@ -6,6 +6,8 @@ import { getFacebookDiagnostics, fetchFacebookReport } from "@/lib/facebook-serv
 import { prisma } from "@/lib/db";
 import { partnerMissingAffiliateWhere } from "./catalog-filters";
 
+const humanClickFilter = { isBot: false } as const;
+
 function getRangeStart(range: string): Date | null {
   const now = new Date();
   if (range === "7d") {
@@ -41,7 +43,9 @@ export async function getAgentAnalyticsSummary(
   startOfMonth.setDate(now.getDate() - 30);
 
   const rangeStart = getRangeStart(range);
-  const rangeFilter = rangeStart ? { clickedAt: { gte: rangeStart } } : {};
+  const rangeFilter = rangeStart
+    ? { clickedAt: { gte: rangeStart }, ...humanClickFilter }
+    : humanClickFilter;
 
   const socialRange = range === "7d" || range === "90d" ? range : range === "all" ? "90d" : "30d";
 
@@ -63,10 +67,10 @@ export async function getAgentAnalyticsSummary(
     igDiag,
     fbDiag,
   ] = await Promise.all([
-    prisma.click.count(),
-    prisma.click.count({ where: { clickedAt: { gte: startOfToday } } }),
-    prisma.click.count({ where: { clickedAt: { gte: startOfWeek } } }),
-    prisma.click.count({ where: { clickedAt: { gte: startOfMonth } } }),
+    prisma.click.count({ where: humanClickFilter }),
+    prisma.click.count({ where: { clickedAt: { gte: startOfToday }, ...humanClickFilter } }),
+    prisma.click.count({ where: { clickedAt: { gte: startOfWeek }, ...humanClickFilter } }),
+    prisma.click.count({ where: { clickedAt: { gte: startOfMonth }, ...humanClickFilter } }),
     prisma.click.count({ where: rangeFilter }),
     queryDailyClicks(range),
     prisma.tool.findMany({
@@ -76,7 +80,9 @@ export async function getAgentAnalyticsSummary(
         slug: true,
         affiliateUrl: true,
         published: true,
-        _count: { select: { clicks: rangeStart ? { where: rangeFilter } : true } },
+        _count: {
+          select: { clicks: rangeStart ? { where: rangeFilter } : { where: humanClickFilter } },
+        },
       },
       orderBy: { name: "asc" },
     }),

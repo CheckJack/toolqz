@@ -2,6 +2,8 @@ import { queryDailyClicks } from "@/lib/analytics-queries";
 import { clickRangeStartDate, type ClickRange } from "@/lib/analytics-ranges";
 import { prisma } from "@/lib/db";
 
+const humanClickFilter = { isBot: false } as const;
+
 export interface OutboundClickAnalytics {
   totalClicks: number;
   todayClicks: number;
@@ -9,6 +11,7 @@ export interface OutboundClickAnalytics {
   monthClicks: number;
   rangeClicks: number;
   range: ClickRange;
+  botClicksExcluded: number;
   allTools: {
     toolId: string;
     name: string;
@@ -20,6 +23,8 @@ export interface OutboundClickAnalytics {
   dailyClicks: { date: string; count: number }[];
   toolDailyClicks?: { date: string; count: number }[];
   referrers: { referrer: string; count: number }[];
+  utmSources: { source: string; count: number }[];
+  sourcePages: { page: string; count: number }[];
   affiliateClicks: number;
   nonAffiliateClicks: number;
   conversionRevenue: number;
@@ -41,7 +46,10 @@ export async function fetchOutboundClickAnalytics(
   startOfMonth.setDate(now.getDate() - 30);
 
   const rangeStart = clickRangeStartDate(range);
-  const rangeFilter = rangeStart ? { clickedAt: { gte: rangeStart } } : {};
+  const rangeFilter = rangeStart
+    ? { clickedAt: { gte: rangeStart }, ...humanClickFilter }
+    : humanClickFilter;
+  const botRangeFilter = rangeStart ? { clickedAt: { gte: rangeStart }, isBot: true } : { isBot: true };
 
   const conversionFilter = rangeStart ? { date: { gte: rangeStart } } : {};
 
@@ -51,17 +59,21 @@ export async function fetchOutboundClickAnalytics(
     weekClicks,
     monthClicks,
     rangeClicks,
+    botClicksExcluded,
     dailyClicks,
     allTools,
     referrers,
+    utmSources,
+    sourcePages,
     conversions,
     toolForFilter,
   ] = await Promise.all([
-    prisma.click.count(),
-    prisma.click.count({ where: { clickedAt: { gte: startOfToday } } }),
-    prisma.click.count({ where: { clickedAt: { gte: startOfWeek } } }),
-    prisma.click.count({ where: { clickedAt: { gte: startOfMonth } } }),
+    prisma.click.count({ where: humanClickFilter }),
+    prisma.click.count({ where: { clickedAt: { gte: startOfToday }, ...humanClickFilter } }),
+    prisma.click.count({ where: { clickedAt: { gte: startOfWeek }, ...humanClickFilter } }),
+    prisma.click.count({ where: { clickedAt: { gte: startOfMonth }, ...humanClickFilter } }),
     prisma.click.count({ where: rangeFilter }),
+    prisma.click.count({ where: botRangeFilter }),
     queryDailyClicks(range),
     prisma.tool.findMany({
       select: {
@@ -70,13 +82,27 @@ export async function fetchOutboundClickAnalytics(
         slug: true,
         affiliateUrl: true,
         published: true,
-        _count: { select: { clicks: rangeStart ? { where: rangeFilter } : true } },
+        _count: { select: { clicks: rangeStart ? { where: rangeFilter } : { where: humanClickFilter } } },
       },
       orderBy: { name: "asc" },
     }),
     prisma.click.groupBy({
       by: ["referrer"],
       where: rangeFilter,
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 10,
+    }),
+    prisma.click.groupBy({
+      by: ["utmSource"],
+      where: { ...rangeFilter, utmSource: { not: null } },
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 10,
+    }),
+    prisma.click.groupBy({
+      by: ["sourcePage"],
+      where: { ...rangeFilter, sourcePage: { not: null } },
       _count: { id: true },
       orderBy: { _count: { id: "desc" } },
       take: 10,
@@ -123,11 +149,20 @@ export async function fetchOutboundClickAnalytics(
     monthClicks,
     rangeClicks,
     range,
+    botClicksExcluded,
     allTools: toolsWithClicks,
     dailyClicks,
     toolDailyClicks,
     referrers: referrers.map((r) => ({
       referrer: r.referrer || "(direct)",
+      count: r._count.id,
+    })),
+    utmSources: utmSources.map((r) => ({
+      source: r.utmSource || "(unknown)",
+      count: r._count.id,
+    })),
+    sourcePages: sourcePages.map((r) => ({
+      page: r.sourcePage || "(unknown)",
       count: r._count.id,
     })),
     affiliateClicks,

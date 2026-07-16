@@ -5,6 +5,8 @@ import { prisma } from "@/lib/db";
 
 const STATIC_PAGES = [
   { id: "page-dashboard", label: "Dashboard", href: "/admin" },
+  { id: "page-tasks", label: "Tasks", href: "/admin/tasks" },
+  { id: "page-notes", label: "Notes", href: "/admin/notes" },
   { id: "page-analytics", label: "Click Analytics", href: "/admin/analytics" },
   { id: "page-hosting", label: "Hosting", href: "/admin/hosting" },
   { id: "page-tools", label: "Tools", href: "/admin/tools" },

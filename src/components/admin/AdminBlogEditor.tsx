@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BlogMarkdownPreview } from "@/components/BlogMarkdownPreview";
 import { useToast } from "@/components/admin/Toast";
 import { slugifyBlogTitle } from "@/lib/blog-payload";
@@ -20,14 +20,57 @@ const emptyForm = {
   published: false,
 };
 
+type WrapOpts = { prefix: string; suffix?: string; placeholder?: string; block?: boolean };
+
+function insertAroundSelection(
+  el: HTMLTextAreaElement,
+  value: string,
+  opts: WrapOpts
+): { next: string; cursor: number } {
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  const selected = value.slice(start, end) || opts.placeholder || "";
+  const suffix = opts.suffix ?? "";
+  let insert = `${opts.prefix}${selected}${suffix}`;
+  if (opts.block) {
+    const beforeNeedsNl = start > 0 && value[start - 1] !== "\n";
+    const afterNeedsNl = end < value.length && value[end] !== "\n";
+    insert = `${beforeNeedsNl ? "\n\n" : ""}${insert}${afterNeedsNl ? "\n\n" : ""}`;
+  }
+  const next = value.slice(0, start) + insert + value.slice(end);
+  const cursor = start + insert.length - suffix.length;
+  return { next, cursor };
+}
+
+const TOOLBAR: { label: string; title: string; opts: WrapOpts }[] = [
+  { label: "H2", title: "Section heading", opts: { prefix: "## ", placeholder: "Section title", block: true } },
+  { label: "H3", title: "Subheading", opts: { prefix: "### ", placeholder: "Subheading", block: true } },
+  { label: "B", title: "Bold", opts: { prefix: "**", suffix: "**", placeholder: "bold" } },
+  { label: "List", title: "Bullet list", opts: { prefix: "- ", placeholder: "List item", block: true } },
+  { label: "Quote", title: "Blockquote", opts: { prefix: "> ", placeholder: "Quote", block: true } },
+  {
+    label: "Link",
+    title: "Link",
+    opts: { prefix: "[", suffix: "](https://)", placeholder: "link text" },
+  },
+  { label: "TOC", title: "Table of contents shortcode", opts: { prefix: "[[toc]]", block: true } },
+  {
+    label: "Tool",
+    title: "Embed catalog tool card",
+    opts: { prefix: "[[tool:", suffix: "]]", placeholder: "tool-slug", block: true },
+  },
+];
+
 export function AdminBlogEditor({ id }: { id: string }) {
   const isNew = id === "new";
   const router = useRouter();
   const { toast } = useToast();
+  const contentRef = useRef<HTMLTextAreaElement>(null);
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [preview, setPreview] = useState(false);
+  const [splitPreview, setSplitPreview] = useState(false);
   const [slugTouched, setSlugTouched] = useState(false);
 
   useEffect(() => {
@@ -60,6 +103,17 @@ export function AdminBlogEditor({ id }: { id: string }) {
         next.slug = slugifyBlogTitle(String(value));
       }
       return next;
+    });
+  }
+
+  function applyToolbar(opts: WrapOpts) {
+    const el = contentRef.current;
+    if (!el) return;
+    const { next, cursor } = insertAroundSelection(el, form.content, opts);
+    set("content", next);
+    requestAnimationFrame(() => {
+      el.focus();
+      el.setSelectionRange(cursor, cursor);
     });
   }
 
@@ -105,6 +159,16 @@ export function AdminBlogEditor({ id }: { id: string }) {
     router.refresh();
   }
 
+  const excerptLen = form.excerpt.length;
+  const excerptHint =
+    excerptLen === 0
+      ? "Aim for ~140–160 characters (SEO meta)"
+      : excerptLen < 120
+        ? `${excerptLen} chars — a bit short for SEO`
+        : excerptLen <= 160
+          ? `${excerptLen} chars — good length`
+          : `${excerptLen} chars — may get truncated in search`;
+
   if (loading) {
     return <p className="text-muted">Loading post…</p>;
   }
@@ -119,14 +183,31 @@ export function AdminBlogEditor({ id }: { id: string }) {
           <h1 className="mt-2 text-2xl font-semibold text-white">
             {isNew ? "New post" : "Edit post"}
           </h1>
+          <p className="mt-1 max-w-xl text-sm text-muted">
+            Write for TOOLQZ readers choosing software. Use headings, short paragraphs, and{" "}
+            <code className="text-muted-dim">[[tool:slug]]</code> to embed catalog cards.
+          </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => setPreview((p) => !p)}
+            onClick={() => {
+              setPreview(false);
+              setSplitPreview((p) => !p);
+            }}
             className="btn-ghost border border-dark-border px-4 py-2"
           >
-            {preview ? "Edit" : "Preview"}
+            {splitPreview ? "Hide split" : "Split preview"}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSplitPreview(false);
+              setPreview((p) => !p);
+            }}
+            className="btn-ghost border border-dark-border px-4 py-2"
+          >
+            {preview ? "Edit" : "Full preview"}
           </button>
           {!isNew && form.published && (
             <a
@@ -160,8 +241,9 @@ export function AdminBlogEditor({ id }: { id: string }) {
                 value={form.title}
                 onChange={(e) => set("title", e.target.value)}
                 className={inputClass}
-                placeholder="Article title"
+                placeholder="SEO-friendly article title (under ~60–70 chars)"
               />
+              <p className="mt-1 text-[12px] text-muted-dim">{form.title.length} characters</p>
             </div>
             <div>
               <label className="mb-1.5 block text-[13px] text-muted">Slug</label>
@@ -188,32 +270,60 @@ export function AdminBlogEditor({ id }: { id: string }) {
           </div>
 
           <div>
-            <label className="mb-1.5 block text-[13px] text-muted">Excerpt</label>
+            <label className="mb-1.5 block text-[13px] text-muted">Excerpt (listing + SEO description)</label>
             <textarea
               required
               rows={2}
               value={form.excerpt}
               onChange={(e) => set("excerpt", e.target.value)}
               className={`${inputClass} resize-y`}
-              placeholder="Short summary for the blog listing and SEO"
+              placeholder="One or two sentences with the main keyword — used as meta description"
             />
+            <p className="mt-1 text-[12px] text-muted-dim">{excerptHint}</p>
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-[13px] text-muted">
-              Content{" "}
-              <span className="text-muted-dim">
-                (## headings, **bold**, [links](url), - lists, &gt; quotes, [[tool:slug]], [[toc]])
-              </span>
-            </label>
-            <textarea
-              required
-              rows={18}
-              value={form.content}
-              onChange={(e) => set("content", e.target.value)}
-              className={`${inputClass} resize-y font-mono text-[14px] leading-relaxed`}
-              placeholder="Write your article…"
-            />
+          <div className={splitPreview ? "grid gap-4 lg:grid-cols-2" : undefined}>
+            <div>
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <label className="text-[13px] text-muted">Content</label>
+                <div className="flex flex-wrap gap-1">
+                  {TOOLBAR.map((btn) => (
+                    <button
+                      key={btn.label}
+                      type="button"
+                      title={btn.title}
+                      onClick={() => applyToolbar(btn.opts)}
+                      className="rounded-md border border-dark-border bg-dark-elevated px-2 py-1 text-[12px] font-medium text-muted hover:border-white/20 hover:text-white"
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <textarea
+                ref={contentRef}
+                required
+                rows={splitPreview ? 22 : 18}
+                value={form.content}
+                onChange={(e) => set("content", e.target.value)}
+                className={`${inputClass} resize-y font-mono text-[14px] leading-relaxed`}
+                placeholder={`## Hook heading\n\nIntro paragraph…\n\n[[toc]]\n\n## Who this is for\n\n…\n\n[[tool:example-slug]]\n\n## Tradeoffs\n\n…`}
+              />
+              <p className="mt-1.5 text-[12px] text-muted-dim">
+                Blank line between blocks. Toolbar inserts markdown + TOOLQZ shortcodes. Full rich-text
+                editing can come next; this keeps the live site renderer working.
+              </p>
+            </div>
+            {splitPreview && (
+              <div className="surface max-h-[36rem] overflow-y-auto rounded-xl p-4 sm:p-5">
+                <p className="mb-3 text-[12px] uppercase tracking-wide text-muted-dim">Live preview</p>
+                <h2 className="text-xl font-semibold text-white">{form.title || "Untitled"}</h2>
+                {form.excerpt && <p className="mt-2 text-sm text-muted">{form.excerpt}</p>}
+                <div className="mt-6">
+                  <BlogMarkdownPreview content={form.content || "*No content yet.*"} />
+                </div>
+              </div>
+            )}
           </div>
 
           <label className="flex items-center gap-2 text-sm text-muted">

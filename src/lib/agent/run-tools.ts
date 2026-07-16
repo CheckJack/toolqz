@@ -12,7 +12,8 @@ import {
   type AssistantCard,
 } from "./assistant-cards";
 import { getAgentAnalyticsSummary } from "./analytics-summary";
-import { researchBlogDraft } from "./blog-research";
+import { researchBlogDraft, researchContentIdeas } from "./blog-research";
+import { researchMarketingPlan, type MarketingChannel, type MarketingPlanKind } from "./marketing-research";
 import { saveAgentToolDraft } from "./create-tool";
 import type { AgentChatResult, AgentExecutionContext, AgentToolName } from "./definitions";
 import { researchToolDraft } from "./tool-research";
@@ -220,11 +221,190 @@ export async function executeAgentTool(
     };
   }
 
+  if (name === "suggest_content_ideas") {
+    const brief = String(args.brief ?? "").trim();
+    if (!brief) throw new Error("suggest_content_ideas requires a brief");
+
+    const count =
+      typeof args.count === "number" && Number.isFinite(args.count)
+        ? Math.round(args.count)
+        : 5;
+    const category =
+      typeof args.category === "string" ? args.category.trim() : "";
+
+    const catalogTools = await prisma.tool.findMany({
+      where: {
+        published: true,
+        ...(category
+          ? { category: { contains: category } }
+          : {}),
+      },
+      select: { name: true, slug: true, category: true, listingType: true },
+      orderBy: [{ featured: "desc" }, { name: "asc" }],
+      take: 40,
+    });
+
+    const ideas = await researchContentIdeas(brief, {
+      count,
+      catalogTools: catalogTools.map((t) => ({
+        name: t.name,
+        slug: t.slug,
+        category: t.category,
+        listingType: t.listingType,
+      })),
+    });
+
+    const lines = ideas.map(
+      (idea, i) =>
+        `${i + 1}. ${idea.title} — ${idea.angle}${
+          idea.relatedToolSlugs.length
+            ? ` (tools: ${idea.relatedToolSlugs.join(", ")})`
+            : ""
+        }`
+    );
+
+    return {
+      result: {
+        success: true,
+        count: ideas.length,
+        ideas,
+        planningOnly: true,
+      },
+      cards: [
+        {
+          type: "alert",
+          variant: "info",
+          title: `${ideas.length} content ideas (planning only)`,
+          message: lines.join("\n"),
+        },
+      ],
+    };
+  }
+
+  if (name === "plan_marketing") {
+    const brief = String(args.brief ?? "").trim();
+    if (!brief) throw new Error("plan_marketing requires a brief");
+
+    const count =
+      typeof args.count === "number" && Number.isFinite(args.count)
+        ? Math.round(args.count)
+        : 5;
+    const category =
+      typeof args.category === "string" ? args.category.trim() : "";
+    const kindRaw = typeof args.kind === "string" ? args.kind.trim() : "campaign";
+    const kind = (
+      ["calendar", "video_scripts", "newsletter", "campaign", "hooks"] as const
+    ).includes(kindRaw as MarketingPlanKind)
+      ? (kindRaw as MarketingPlanKind)
+      : "campaign";
+
+    const allowedChannels = new Set([
+      "instagram",
+      "tiktok",
+      "youtube",
+      "newsletter",
+      "blog",
+      "cross_channel",
+    ]);
+    const channels = Array.isArray(args.channels)
+      ? (args.channels
+          .map((c) => String(c).trim().toLowerCase())
+          .filter((c) => allowedChannels.has(c)) as MarketingChannel[])
+      : undefined;
+
+    const catalogTools = await prisma.tool.findMany({
+      where: {
+        published: true,
+        ...(category ? { category: { contains: category } } : {}),
+      },
+      select: { name: true, slug: true, category: true, listingType: true },
+      orderBy: [{ featured: "desc" }, { name: "asc" }],
+      take: 40,
+    });
+
+    let analyticsHint: string | undefined;
+    if (args.include_analytics === true) {
+      try {
+        const summary = await getAgentAnalyticsSummary("30d");
+        analyticsHint = JSON.stringify({
+          range: "30d",
+          todayClicks: summary.todayClicks,
+          weekClicks: summary.weekClicks,
+          monthClicks: summary.monthClicks,
+          topTools: Array.isArray(summary.topTools)
+            ? summary.topTools.slice(0, 5)
+            : summary.topTools,
+          newsletter: summary.newsletter,
+          instagram: summary.instagram,
+        }).slice(0, 1200);
+      } catch {
+        analyticsHint = "Analytics unavailable for this plan.";
+      }
+    }
+
+    const plan = await researchMarketingPlan({
+      brief,
+      kind,
+      channels,
+      count,
+      analyticsHint,
+      catalogTools: catalogTools.map((t) => ({
+        name: t.name,
+        slug: t.slug,
+        category: t.category,
+        listingType: t.listingType,
+      })),
+    });
+
+    const lines = plan.items.map(
+      (item, i) =>
+        `${i + 1}. [${item.channel}] ${item.title} — ${item.hookOrSubject}${
+          item.relatedToolSlugs.length ? ` (${item.relatedToolSlugs.join(", ")})` : ""
+        }`
+    );
+
+    return {
+      result: {
+        success: true,
+        kind,
+        summary: plan.summary,
+        count: plan.items.length,
+        items: plan.items,
+        planningOnly: true,
+      },
+      cards: [
+        {
+          type: "alert",
+          variant: "info",
+          title: `Marketing plan (${kind})`,
+          message: `${plan.summary}\n\n${lines.join("\n")}`,
+        },
+      ],
+    };
+  }
+
   if (name === "create_blog_draft") {
     const topic = String(args.topic ?? "").trim();
     if (!topic) throw new Error("create_blog_draft requires a topic");
+    const angle =
+      typeof args.angle === "string" ? args.angle.trim() : undefined;
 
-    const draft = await researchBlogDraft(topic);
+    const catalogTools = await prisma.tool.findMany({
+      where: { published: true },
+      select: { name: true, slug: true, category: true, listingType: true },
+      orderBy: [{ featured: "desc" }, { name: "asc" }],
+      take: 40,
+    });
+
+    const draft = await researchBlogDraft(topic, {
+      angle,
+      catalogTools: catalogTools.map((t) => ({
+        name: t.name,
+        slug: t.slug,
+        category: t.category,
+        listingType: t.listingType,
+      })),
+    });
     const conflict = await prisma.blogPost.findUnique({ where: { slug: draft.slug } });
     if (conflict) {
       draft.slug = `${draft.slug}-${Date.now().toString(36).slice(-4)}`;

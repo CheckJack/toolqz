@@ -16,11 +16,40 @@ export function buildFollowUpPrompts(
     ];
   }
 
+  if (lastTool === "suggest_content_ideas" && toolResult.success) {
+    return [
+      { label: "Draft one post", text: "Write a full blog draft for the first idea" },
+      { label: "More ideas", text: "Suggest 5 more TOOLQZ blog ideas" },
+      {
+        label: "Social plan",
+        text: "Turn these into an Instagram + TikTok + YouTube demo plan for this week",
+      },
+    ];
+  }
+
+  if (lastTool === "plan_marketing" && toolResult.success) {
+    return [
+      {
+        label: "Video scripts",
+        text: "Expand this into detailed Instagram and TikTok demo video scripts",
+      },
+      {
+        label: "Newsletter",
+        text: "Turn the best items into a newsletter outline with subject lines",
+      },
+      { label: "Create tasks", text: "Create admin tasks for each item in this marketing plan" },
+    ];
+  }
+
   if (lastTool === "create_blog_draft" && toolResult.success) {
     const title = String(toolResult.title ?? "blog post");
     return [
       { label: "Publish blog", text: `Publish blog post "${title}"` },
       { label: "List drafts", text: "List draft blog posts" },
+      {
+        label: "Social package",
+        text: `Plan Instagram, TikTok, and YouTube content to promote the blog "${title}"`,
+      },
     ];
   }
 

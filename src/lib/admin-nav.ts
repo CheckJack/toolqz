@@ -9,6 +9,7 @@ import {
   ListTodo,
   Mail,
   MessageSquare,
+  StickyNote,
   ScrollText,
   Server,
   Users,
@@ -38,6 +39,7 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     items: [
       { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
       { href: "/admin/tasks", label: "Tasks", icon: ListTodo },
+      { href: "/admin/notes", label: "Notes", icon: StickyNote },
     ],
   },
   {
@@ -88,6 +90,7 @@ export interface AdminPageMeta {
 const PAGE_META: { match: (path: string) => boolean; meta: AdminPageMeta }[] = [
   { match: (p) => p === "/admin", meta: { section: "Overview", title: "Dashboard" } },
   { match: (p) => p.startsWith("/admin/tasks"), meta: { section: "Overview", title: "Tasks" } },
+  { match: (p) => p.startsWith("/admin/notes"), meta: { section: "Overview", title: "Notes" } },
   { match: (p) => p.startsWith("/admin/analytics"), meta: { section: "Insights", title: "Analytics" } },
   { match: (p) => p.startsWith("/admin/hosting"), meta: { section: "Insights", title: "Hosting" } },
   { match: (p) => p === "/admin/tools/new", meta: { section: "Catalog", title: "New tool" } },

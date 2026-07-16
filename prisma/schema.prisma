@@ -34,6 +34,7 @@ model User {
   assignedTasks      AdminTask[]          @relation("AssignedTasks")
   createdTasks         AdminTask[]          @relation("CreatedTasks")
   playbookSnippets   AdminPlaybookSnippet[]
+  notes              AdminNote[]
 }
 
 model PasswordResetToken {
@@ -105,15 +106,29 @@ model ToolSlugRedirect {
 }
 
 model Click {
-  id        String   @id @default(cuid())
-  toolId    String
-  tool      Tool     @relation(fields: [toolId], references: [id], onDelete: Cascade)
-  referrer  String?
-  userAgent String?
-  clickedAt DateTime @default(now())
+  id                 String            @id @default(cuid())
+  toolId             String
+  tool               Tool              @relation(fields: [toolId], references: [id], onDelete: Cascade)
+  referrer           String?
+  userAgent          String?
+  clickedAt          DateTime          @default(now())
+  utmSource          String?
+  utmMedium          String?
+  utmCampaign        String?
+  utmContent         String?
+  utmTerm            String?
+  sourcePage         String?
+  listingType        String?
+  affiliateProgramId String?
+  affiliateProgram   AffiliateProgram? @relation(fields: [affiliateProgramId], references: [id], onDelete: SetNull)
+  isBot              Boolean           @default(false)
+  ipHash             String?
 
   @@index([toolId])
   @@index([clickedAt])
+  @@index([isBot])
+  @@index([utmSource])
+  @@index([affiliateProgramId])
 }
 
 model AffiliateProgram {
@@ -148,6 +163,7 @@ model AffiliateProgram {
   activities       AffiliateActivity[]
   financeEntries   FinanceEntry[]
   adminTasks         AdminTask[]
+  clicks             Click[]
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
 
@@ -408,4 +424,47 @@ model AffiliateConversion {
 
   @@index([date])
   @@index([toolSlug])
+}
+
+model AdminNote {
+  id          String                @id @default(cuid())
+  title       String
+  content     String                @default("")
+  visibility  String                @default("PRIVATE")
+  pinned      Boolean               @default(false)
+  createdById String
+  createdBy   User                  @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  links       AdminNoteLink[]
+  attachments AdminNoteAttachment[]
+
+  @@index([createdById])
+  @@index([visibility])
+  @@index([updatedAt])
+  @@index([pinned])
+}
+
+model AdminNoteLink {
+  id        String    @id @default(cuid())
+  noteId    String
+  note      AdminNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  label     String
+  url       String
+  createdAt DateTime  @default(now())
+
+  @@index([noteId])
+}
+
+model AdminNoteAttachment {
+  id          String    @id @default(cuid())
+  noteId      String
+  note        AdminNote @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  fileName    String
+  mimeType    String
+  sizeBytes   Int
+  storagePath String
+  createdAt   DateTime  @default(now())
+
+  @@index([noteId])
 }

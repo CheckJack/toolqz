@@ -41,6 +41,13 @@ import {
   searchPlaybookForAgent,
   updatePlaybookSnippetForAgent,
 } from "./playbook-agent";
+import {
+  createNoteForAgent,
+  deleteNoteForAgent,
+  getNoteForAgent,
+  listNotesForAgent,
+  updateNoteForAgent,
+} from "./notes-agent";
 import { researchToolDraft } from "./tool-research";
 import { getToolIssuesSummary } from "./tool-issues";
 import type { AgentExecutionContext, AgentToolName } from "./definitions";
@@ -908,6 +915,101 @@ export async function executeExtendedAgentTool(
     };
   }
 
+  if (name === "list_notes") {
+    const result = await listNotesForAgent(args, ctx.userId);
+    return {
+      result,
+      cards: [
+        {
+          type: "alert",
+          variant: "info",
+          title: `${result.count} notes`,
+          message:
+            result.notes
+              .map(
+                (n) =>
+                  `• ${n.title} [${n.visibility}]${n.pinned ? " 📌" : ""} — ${n.createdBy}`
+              )
+              .join("\n") || "No notes found.",
+        },
+      ],
+      links: [{ label: "Notes", href: "/admin/notes" }],
+    };
+  }
+
+  if (name === "get_note") {
+    const result = await getNoteForAgent(args, ctx.userId);
+    const note = result.note;
+    return {
+      result,
+      cards: [
+        {
+          type: "alert",
+          variant: "info",
+          title: note.title,
+          message: `${note.visibility} · by ${note.createdBy.name}\nLinks: ${note.links.length} · Files: ${note.attachments.length}`,
+        },
+      ],
+      links: [{ label: note.title, href: "/admin/notes" }],
+    };
+  }
+
+  if (name === "create_note") {
+    const result = await createNoteForAgent(args, ctx.userId);
+    await logAudit("create", "admin_note", `Assistant created note "${result.note.title}"`, {
+      userId: ctx.userId,
+      entityId: result.note.id,
+    });
+    return {
+      result,
+      links: [{ label: result.note.title, href: "/admin/notes" }],
+    };
+  }
+
+  if (name === "update_note") {
+    const result = await updateNoteForAgent(args, ctx.userId, ctx.role);
+    await logAudit("update", "admin_note", `Assistant updated note "${result.note.title}"`, {
+      userId: ctx.userId,
+      entityId: result.note.id,
+    });
+    return {
+      result: { success: true, note: result.note },
+      links: [{ label: result.note.title, href: "/admin/notes" }],
+    };
+  }
+
+  if (name === "delete_note") {
+    const previewNote = await getNoteForAgent(args, ctx.userId).catch(() => null);
+    const title = previewNote?.note.title ?? "this note";
+    const preview = needsConfirmationWithToken(
+      ctx.userId,
+      "delete_note",
+      args,
+      args.confirm,
+      {
+        action: "delete",
+        name: title,
+        tool: { name: title },
+        message: `This permanently deletes the note "${title}" and its attachments.`,
+      }
+    );
+    if (preview) {
+      return {
+        result: preview,
+        cards: [cardFromConfirmation(preview, preview.confirmationToken)],
+      };
+    }
+    const result = await deleteNoteForAgent(args, ctx.userId, ctx.role);
+    await logAudit("delete", "admin_note", `Assistant deleted note "${result.title}"`, {
+      userId: ctx.userId,
+      entityId: result.id,
+    });
+    return {
+      result,
+      links: [{ label: "Notes", href: "/admin/notes" }],
+    };
+  }
+
   if (name === "search_playbook") {
     const result = await searchPlaybookForAgent(args);
     return {
@@ -999,6 +1101,11 @@ export const EXTENDED_AGENT_TOOLS = new Set<AgentToolName>([
   "update_finance_entry",
   "delete_finance_entry",
   "list_team_members",
+  "list_notes",
+  "get_note",
+  "create_note",
+  "update_note",
+  "delete_note",
   "search_playbook",
   "create_playbook_snippet",
   "update_playbook_snippet",

@@ -22,6 +22,7 @@ export interface DashboardData {
 }
 
 const INACTIVE_STATUSES = ["ACTIVE", "REJECTED", "NOT_AVAILABLE"] as const;
+const humanClickFilter = { isBot: false } as const;
 
 /** Dashboard metrics with batched queries to avoid exhausting the DB pool. */
 export async function getDashboardAnalytics(session: SessionUser): Promise<DashboardData> {
@@ -36,10 +37,10 @@ export async function getDashboardAnalytics(session: SessionUser): Promise<Dashb
   weekAhead.setDate(now.getDate() + 7);
 
   const [totalClicks, todayClicks, weekClicks, monthClicks, dailyClicks] = await Promise.all([
-    prisma.click.count(),
-    prisma.click.count({ where: { clickedAt: { gte: startOfToday } } }),
-    prisma.click.count({ where: { clickedAt: { gte: startOfWeek } } }),
-    prisma.click.count({ where: { clickedAt: { gte: startOfMonth } } }),
+    prisma.click.count({ where: humanClickFilter }),
+    prisma.click.count({ where: { clickedAt: { gte: startOfToday }, ...humanClickFilter } }),
+    prisma.click.count({ where: { clickedAt: { gte: startOfWeek }, ...humanClickFilter } }),
+    prisma.click.count({ where: { clickedAt: { gte: startOfMonth }, ...humanClickFilter } }),
     queryDailyClicks("7d"),
   ]);
 
@@ -80,6 +81,7 @@ export async function getDashboardAnalytics(session: SessionUser): Promise<Dashb
 
   const clickCounts = await prisma.click.groupBy({
     by: ["toolId"],
+    where: humanClickFilter,
     _count: { id: true },
     orderBy: { _count: { id: "desc" } },
     take: 10,

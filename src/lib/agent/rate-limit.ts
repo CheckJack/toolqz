@@ -5,6 +5,8 @@ const RESEARCH_TOOLS = new Set([
   "create_tools",
   "update_tool",
   "create_blog_draft",
+  "suggest_content_ideas",
+  "plan_marketing",
 ]);
 
 const WINDOW_MS = 60 * 60 * 1000;

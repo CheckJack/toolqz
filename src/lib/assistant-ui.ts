@@ -1,5 +1,16 @@
 export const ASSISTANT_CAPABILITIES = [
   {
+    title: "Marketing & social",
+    description: "Calendars, Reels/TikTok/YouTube demos, newsletter outlines, cross-channel campaigns.",
+    prompt:
+      "Plan this week's Instagram + TikTok + YouTube partner demo videos and a newsletter — scripts and calendar, don't write full blogs",
+  },
+  {
+    title: "Strategy & ideas",
+    description: "Brainstorm content and growth — without writing full posts until you ask.",
+    prompt: "Give me 5 TOOLQZ blog ideas for the next month — titles and angles only, don't write the posts",
+  },
+  {
     title: "Tools & listings",
     description: "Create drafts from URLs, set partner vs editorial, publish with confirmation.",
     prompt: "List draft tools",
@@ -20,9 +31,14 @@ export const ASSISTANT_CAPABILITIES = [
     prompt: "Show click analytics for the last 30 days",
   },
   {
-    title: "Content",
-    description: "Draft, edit, and publish blog posts; manage categories.",
+    title: "Content drafts",
+    description: "Write SEO-friendly blog drafts tied to the catalog when you want a full post.",
     prompt: "List draft blog posts",
+  },
+  {
+    title: "Notes",
+    description: "Private or shared team notes with rich text, links, and uploads.",
+    prompt: "Create a shared note titled Weekly marketing ideas with a short outline",
   },
   {
     title: "Tasks",

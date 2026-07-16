@@ -244,6 +244,14 @@ export function AdminAnalytics({
     data.referrers.map((r) => ({ name: r.referrer, value: r.count })),
     8
   );
+  const utmSourcesChart = toRankChartRows(
+    (data.utmSources ?? []).map((r) => ({ name: r.source, value: r.count })),
+    8
+  );
+  const sourcePagesChart = toRankChartRows(
+    (data.sourcePages ?? []).map((r) => ({ name: r.page, value: r.count })),
+    8
+  );
   const clickTypeDonut = [
     { name: "Affiliate URLs", value: data.affiliateClicks, color: CHART.primary },
     { name: "Direct URLs", value: data.nonAffiliateClicks, color: CHART.muted },
@@ -388,7 +396,7 @@ export function AdminAnalytics({
       <div className="grid gap-4 lg:grid-cols-2">
         <AdminChartCard
           title="Affiliate vs direct clicks"
-          description="Share of outbound clicks in the selected range"
+          description="Share of outbound clicks in the selected range (bots excluded)"
         >
           <DonutBreakdownChart data={clickTypeDonut} valueLabel="Clicks" height={240} />
         </AdminChartCard>
@@ -406,6 +414,34 @@ export function AdminAnalytics({
           </AdminChartCard>
         )}
       </div>
+
+      {(data.utmSources?.length ?? 0) > 0 || (data.sourcePages?.length ?? 0) > 0 ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {(data.utmSources?.length ?? 0) > 0 ? (
+            <AdminChartCard
+              title="UTM sources"
+              description="Captured utm_source on outbound clicks"
+            >
+              <HorizontalBarChart data={utmSourcesChart} valueLabel="Clicks" height={240} />
+            </AdminChartCard>
+          ) : null}
+          {(data.sourcePages?.length ?? 0) > 0 ? (
+            <AdminChartCard
+              title="Source pages"
+              description="Internal Toolqz pages that led to Visit clicks"
+            >
+              <HorizontalBarChart data={sourcePagesChart} valueLabel="Clicks" height={240} />
+            </AdminChartCard>
+          ) : null}
+        </div>
+      ) : null}
+
+      {data.botClicksExcluded > 0 ? (
+        <p className="text-xs text-muted">
+          {data.botClicksExcluded.toLocaleString()} bot or crawler requests excluded from counts in
+          this range.
+        </p>
+      ) : null}
 
       <AdminChartCard
         title="Clicks per day"

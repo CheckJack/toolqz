@@ -12,6 +12,7 @@ export const ADMIN_ONLY_TOOLS = new Set<AgentToolName>([
   "delete_task",
   "delete_playbook_snippet",
   "delete_finance_entry",
+  "delete_note",
 ]);
 
 export function assertAgentToolAccess(tool: AgentToolName, role: string): void {

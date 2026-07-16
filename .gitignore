@@ -41,6 +41,10 @@ prisma/dev.db
 prisma/dev.db-journal
 prisma/prisma/
 
+# note uploads (keep folder via .gitkeep)
+public/uploads/notes/**
+!public/uploads/notes/.gitkeep
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
