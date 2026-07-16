@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Lock,
   Users,
@@ -13,7 +13,10 @@ import {
   Save,
 } from "lucide-react";
 import { useToast } from "@/components/admin/Toast";
-import { NoteRichTextEditor } from "@/components/admin/NoteRichTextEditor";
+import {
+  NoteRichTextEditor,
+  type NoteRichTextEditorHandle,
+} from "@/components/admin/NoteRichTextEditor";
 import {
   NOTE_VISIBILITY_LABELS,
   type NoteVisibility,
@@ -62,6 +65,8 @@ export function AdminNotes({ user }: { user: SessionUser }) {
   const [linkLabel, setLinkLabel] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [uploading, setUploading] = useState(false);
+  const editorRef = useRef<NoteRichTextEditorHandle>(null);
+  const hydratedNoteIdRef = useRef<string | null>(null);
 
   const selected = useMemo(
     () => notes.find((n) => n.id === selectedId) ?? null,
@@ -91,8 +96,15 @@ export function AdminNotes({ user }: { user: SessionUser }) {
     void load();
   }, [load]);
 
+  // Only hydrate drafts when switching notes — not when the same note is
+  // refreshed after link/upload/save (that was wiping unsaved body text).
   useEffect(() => {
-    if (!selected) return;
+    if (!selected) {
+      hydratedNoteIdRef.current = null;
+      return;
+    }
+    if (hydratedNoteIdRef.current === selected.id) return;
+    hydratedNoteIdRef.current = selected.id;
     setDraftTitle(selected.title);
     setDraftContent(selected.content);
     setDraftVisibility(selected.visibility);
@@ -101,6 +113,10 @@ export function AdminNotes({ user }: { user: SessionUser }) {
 
   function selectNote(note: Note) {
     setSelectedId(note.id);
+  }
+
+  function mergeNote(updated: Note) {
+    setNotes((prev) => prev.map((n) => (n.id === updated.id ? updated : n)));
   }
 
   async function createNote() {
@@ -131,19 +147,28 @@ export function AdminNotes({ user }: { user: SessionUser }) {
     if (!selected) return;
     setSaving(true);
     try {
+      // Always read live HTML from TipTap — draft state can lag or get wiped
+      // when links/uploads refresh the note list.
+      const content = editorRef.current?.getHTML() ?? draftContent;
+      setDraftContent(content);
+
       const res = await fetch(`/api/admin/notes/${selected.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: draftTitle,
-          content: draftContent,
+          content,
           visibility: draftVisibility,
           pinned: draftPinned,
         }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Could not save");
-      setNotes((prev) => prev.map((n) => (n.id === data.id ? data : n)));
+      mergeNote(data);
+      setDraftTitle(data.title);
+      setDraftContent(data.content);
+      setDraftVisibility(data.visibility);
+      setDraftPinned(data.pinned);
       toast("Note saved", "success");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Could not save", "error");
@@ -168,20 +193,49 @@ export function AdminNotes({ user }: { user: SessionUser }) {
 
   async function addLink() {
     if (!selected || !linkUrl.trim()) return;
-    const res = await fetch(`/api/admin/notes/${selected.id}/links`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: linkUrl.trim(), label: linkLabel.trim() || undefined }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      toast(data.error || "Could not add link", "error");
-      return;
+
+    let url = linkUrl.trim();
+    if (!/^https?:\/\//i.test(url)) {
+      url = `https://${url}`;
     }
-    setNotes((prev) => prev.map((n) => (n.id === data.id ? data : n)));
-    setLinkLabel("");
-    setLinkUrl("");
-    toast("Link added", "success");
+
+    try {
+      // Persist body first so adding a link doesn't leave content unsaved.
+      const content = editorRef.current?.getHTML() ?? draftContent;
+      if (content !== selected.content || draftTitle !== selected.title) {
+        const saveRes = await fetch(`/api/admin/notes/${selected.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: draftTitle,
+            content,
+            visibility: draftVisibility,
+            pinned: draftPinned,
+          }),
+        });
+        const saved = await saveRes.json();
+        if (!saveRes.ok) throw new Error(saved.error || "Could not save note before adding link");
+        mergeNote(saved);
+        setDraftContent(saved.content);
+      }
+
+      const res = await fetch(`/api/admin/notes/${selected.id}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, label: linkLabel.trim() || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        toast(data.error || "Could not add link", "error");
+        return;
+      }
+      mergeNote(data);
+      setLinkLabel("");
+      setLinkUrl("");
+      toast("Link added", "success");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Could not add link", "error");
+    }
   }
 
   async function removeLink(linkId: string) {
@@ -194,13 +248,32 @@ export function AdminNotes({ user }: { user: SessionUser }) {
       toast(data.error || "Could not remove link", "error");
       return;
     }
-    setNotes((prev) => prev.map((n) => (n.id === data.id ? data : n)));
+    mergeNote(data);
   }
 
   async function uploadFile(file: File) {
     if (!selected) return;
     setUploading(true);
     try {
+      // Persist body first so content isn't lost if the user never hits Save.
+      const content = editorRef.current?.getHTML() ?? draftContent;
+      if (content !== selected.content || draftTitle !== selected.title) {
+        const saveRes = await fetch(`/api/admin/notes/${selected.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: draftTitle,
+            content,
+            visibility: draftVisibility,
+            pinned: draftPinned,
+          }),
+        });
+        const saved = await saveRes.json();
+        if (!saveRes.ok) throw new Error(saved.error || "Could not save note before upload");
+        mergeNote(saved);
+        setDraftContent(saved.content);
+      }
+
       const form = new FormData();
       form.append("file", file);
       const res = await fetch(`/api/admin/notes/${selected.id}/attachments`, {
@@ -209,7 +282,7 @@ export function AdminNotes({ user }: { user: SessionUser }) {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Upload failed");
-      setNotes((prev) => prev.map((n) => (n.id === data.id ? data : n)));
+      mergeNote(data);
       toast("File uploaded", "success");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Upload failed", "error");
@@ -229,7 +302,7 @@ export function AdminNotes({ user }: { user: SessionUser }) {
       toast(data.error || "Could not remove file", "error");
       return;
     }
-    setNotes((prev) => prev.map((n) => (n.id === data.id ? data : n)));
+    mergeNote(data);
   }
 
   const canEdit =
@@ -400,6 +473,7 @@ export function AdminNotes({ user }: { user: SessionUser }) {
 
             <NoteRichTextEditor
               key={selected.id}
+              ref={editorRef}
               value={draftContent}
               onChange={setDraftContent}
               editable={canEdit}

@@ -1,26 +1,40 @@
 "use client";
 
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+} from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import Placeholder from "@tiptap/extension-placeholder";
-import { useEffect } from "react";
 
 const btn =
   "rounded-md border border-dark-border bg-dark-elevated px-2 py-1 text-[12px] font-medium text-muted hover:border-white/20 hover:text-white disabled:opacity-40";
 
-export function NoteRichTextEditor({
-  value,
-  onChange,
-  placeholder = "Write your note…",
-  editable = true,
-}: {
-  value: string;
-  onChange: (html: string) => void;
-  placeholder?: string;
-  editable?: boolean;
-}) {
+export type NoteRichTextEditorHandle = {
+  getHTML: () => string;
+};
+
+export const NoteRichTextEditor = forwardRef<
+  NoteRichTextEditorHandle,
+  {
+    value: string;
+    onChange: (html: string) => void;
+    placeholder?: string;
+    editable?: boolean;
+  }
+>(function NoteRichTextEditor(
+  {
+    value,
+    onChange,
+    placeholder = "Write your note…",
+    editable = true,
+  },
+  ref
+) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -46,6 +60,14 @@ export function NoteRichTextEditor({
       },
     },
   });
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      getHTML: () => editor?.getHTML() ?? value ?? "",
+    }),
+    [editor, value]
+  );
 
   useEffect(() => {
     if (!editor) return;
@@ -134,4 +156,4 @@ export function NoteRichTextEditor({
       <EditorContent editor={editor} />
     </div>
   );
-}
+});
